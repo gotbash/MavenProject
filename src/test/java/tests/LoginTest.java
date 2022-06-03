@@ -38,16 +38,6 @@ public class LoginTest {
         System.out.println("Clicking login button");
         loginButton.click();
 
-        String title = "Welcome - LambdaTest";
-
-        String actualTitle = driver.getTitle();
-
-        System.out.println("Verifying the page title has started");
-        Assert.assertEquals(actualTitle,title,"Page title doesnt match");
-
-        System.out.println("The page title has been successfully verified");
-
-        System.out.println("User logged in successfully");
 
         driver.quit();
     }
