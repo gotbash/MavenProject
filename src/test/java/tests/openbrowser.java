@@ -10,6 +10,6 @@ public class openbrowser {
         System.setProperty("webdriver.chrome.driver", "chromedriver.exe");
         WebDriver driver = new ChromeDriver();
         driver.get("http://176.36.27.131:8180/#/");
-        driver.quit();
+
     }
 }

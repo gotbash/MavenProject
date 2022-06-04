@@ -1,10 +1,12 @@
 package pageobjects;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 
 public class Menu {
 
+    private WebDriver driver;
     WebElement tickets = driver.findElement(By.id("menu-tickets"));
     WebElement dashboard = driver.findElement(By.id("menu-dashboard"));
     WebElement companies = driver.findElement(By.id("menu-companies"));
@@ -13,26 +15,20 @@ public class Menu {
     WebElement departments = driver.findElement(By.id("menu-departments"));
     WebElement managers = driver.findElement(By.id("menu-managers"));
     WebElement categories = driver.findElement(By.id("menu-categories"));
+    WebElement menu_tickets = driver.findElement(By.xpath("//a[@id='menu-tickets']//p"));
+    WebElement menu_dashboard = driver.findElement(By.xpath("//a[@id='menu-dashboard']//p"));
+    WebElement menu_companies = driver.findElement(By.xpath("//a[@id='menu-companies']//p"));
+    WebElement menu_contacts = driver.findElement(By.xpath("//a[@id='menu-contacts']//p"));
+    WebElement menu_devices = driver.findElement(By.xpath("//a[@id='menu-device-list']//p"));
+    WebElement menu_departments = driver.findElement(By.xpath("//a[@id='menu-departments']//p"));
+    WebElement menu_categories = driver.findElement(By.xpath("//a[@id='menu-categories']//p"));
 
 
-    //a[@id='menu-dashboard']
-    //a[@id='menu-tickets']
-    //a[@id='menu-companies']
-    //a[@id='menu-contacts']
-    //a[@id='menu-device-list']
-    //a[@id='menu-departments']
-    //a[@id='menu-managers']
-    //a[@id='menu-categories']
 
-    // Pages
 
-    WebElement total_button = driver.findElement(By.id("stage-total"));
-    //a[@id='stage-total']
-    WebElement closed_button = driver.findElement(By.id("stage-closed"));
-    //a[@id='stage-closed']
-    WebElement NewTicket = driver.findElement(By.id("create-new-ticket"));
-    //button[@id='create-new-ticket']
-    WebElement search_bar = driver.findElement(By.id("search-bar"));
-    //input[@id='search-bar']
+
+
+
 
 }
+
