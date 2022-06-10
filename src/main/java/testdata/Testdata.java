@@ -1,6 +1,4 @@
-package testCases;
-
-import java.util.concurrent.TimeUnit;
+package testdata;
 
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -9,7 +7,7 @@ import org.openqa.selenium.support.PageFactory;
 import pageobjects.Login;
 import pageobjects.Profile;
 
-public class Login_TC {
+public class Testdata {
 
     static WebDriver driver;
 
@@ -17,7 +15,6 @@ public class Login_TC {
 
         driver = new ChromeDriver();
 
-        driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
         driver.get("http://176.36.27.131:8180/#/");
 
         //Instantiating Login & Profile page using initElements()
@@ -29,7 +26,6 @@ public class Login_TC {
         profilePg.verifyUser("---your username---");
         profilePg.logout_Action();
 
-        driver.quit();
     }
 
 }

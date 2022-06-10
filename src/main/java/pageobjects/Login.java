@@ -16,7 +16,6 @@ public class Login {
 
     //Locating the username text box
     @FindAll({
-            @FindBy(id="wrapper"),
             @FindBy(id="username")
     })
     WebElement username;
