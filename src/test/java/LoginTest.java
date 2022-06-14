@@ -5,7 +5,7 @@ import org.openqa.selenium.support.PageFactory;
 import pageobjects.Login;
 import pageobjects.Profile;
 
-public class Testdata {
+public class LoginTest {
 
     static WebDriver driver;
 
