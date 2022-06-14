@@ -9,7 +9,7 @@ public class LoginTest {
 
     static WebDriver driver;
 
-    public static void TheDerekProject(String[] args) {
+    public static void main(String[] args) {
 
         driver = new ChromeDriver();
 
