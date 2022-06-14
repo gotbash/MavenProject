@@ -9,11 +9,9 @@ public class LoginTest {
 
     static WebDriver driver;
 
-    public static void testLogin(String[] args) {
+    public static void testLogin() {
 
-        driver = new ChromeDriver();
 
-        driver.get("http://176.36.27.131:8180/#/");
 
         //Instantiating Login & Profile page using initElements()
         Login loginPg = PageFactory.initElements(driver, Login.class);
