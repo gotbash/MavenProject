@@ -1,6 +1,6 @@
 package testdata;
-
 public class TestData {
-    public Object userName;
-    public Object password;
-}
+
+    public String userName = "thadmin";
+            public String password = "thickethub";
+    }

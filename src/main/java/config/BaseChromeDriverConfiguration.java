@@ -11,7 +11,7 @@ public class BaseChromeDriverConfiguration {
 
     @Before
     public void initializeWebDriver() throws IOException {
-        System.setProperty("webdriver.chrome.driver", ".src/drivers/chromedriver.exe");
+        System.setProperty("webdriver.chrome.driver", ".\\src\\drivers\\chromedriver.exe");
         driver = new ChromeDriver();
         driver.manage().window().maximize();
         driver.get("http://176.36.27.131:8180/#/");
