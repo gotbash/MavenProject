@@ -1,26 +1,21 @@
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
+import config.BaseChromeDriverConfiguration;
+import org.junit.Test;
 import org.openqa.selenium.support.PageFactory;
-
 import pageobjects.Login;
-import pageobjects.Profile;
+import testdata.TestData;
 
-public class LoginTest {
+public class LoginTest extends BaseChromeDriverConfiguration{
 
-    static WebDriver driver;
+   @Test
 
-    public static void testLogin() {
-
-
+    public void testLogin() {
 
         //Instantiating Login & Profile page using initElements()
-        Login loginPg = PageFactory.initElements(driver, Login.class);
-        Profile profilePg = PageFactory.initElements(driver, Profile.class);
+        Login login = PageFactory.initElements(driver, Login.class);
+           TestData testData = new TestData();
 
-        //Using the methods created in pages class to perform actions
-        loginPg.LogIn_Action("thadmin", "tickethub");
-        profilePg.verifyUser("---your username---");
-        profilePg.logout_Action();
+           //Make Login
+           login.makeLogin(testData.userName, testData.password);
 
     }
 

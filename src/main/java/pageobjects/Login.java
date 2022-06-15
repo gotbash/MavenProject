@@ -35,4 +35,7 @@ public class Login {
         pswd.sendKeys(pwd);
         loginBtn.click();
     }
+
+    public void makeLogin(Object userName, Object password) {
+    }
 }
