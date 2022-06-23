@@ -12,4 +12,7 @@ public class Tickets {
     WebElement searchbar = driver.findElement(By.xpath("//button[@id='search-bar']"));
     WebElement button_mytickets = driver.findElement(By.xpath("//button[@id='user_tickets']"));
     WebElement button_opentickets = driver.findElement(By.xpath("//button[@id='OPEN']"));
+    WebElement panel_titles = driver.findElement(By.xpath("(//div[@class='main-panel'])[1]"));
+    WebElement getPanel_titles = driver.findElement(By.xpath("//tbody/tr/th[string-length(text())>0]"));
+
 }

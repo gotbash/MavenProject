@@ -4,6 +4,8 @@ import org.openqa.selenium.support.PageFactory;
 import pageobjects.Login;
 import testdata.TestData;
 
+import static jdk.internal.agent.Agent.getText;
+
 public class LoginTest extends BaseChromeDriverConfiguration{
 
    @Test
@@ -16,7 +18,12 @@ public class LoginTest extends BaseChromeDriverConfiguration{
 
            //Make Login
            login.makeLogin(testData.userName, testData.password);
+       getText(); //tbody/tr/th[string-length(text())>0]"));
 
+
+    }
+
+    private void getText() {
     }
 
 }

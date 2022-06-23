@@ -15,10 +15,6 @@ public class BaseChromeDriverConfiguration {
         driver = new ChromeDriver();
         driver.manage().window().maximize();
         driver.get("http://176.36.27.131:8180/#/");
-    }
 
-    @After
-    public void quitDriver() {
-        driver.quit();
     }
 }
