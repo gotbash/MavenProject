@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GM Control Dashboard — K-Brands</title>
+<title>GM Control Tower — K-Brands</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   /* ========== RESET & BASE ========== */
@@ -485,6 +485,27 @@
   }
   .clickup-link:hover { text-decoration: underline; }
   .clickup-missing { color: var(--text-muted); font-size: 11px; font-style: italic; }
+
+  /* ========== PRIORITY CARD — LABELED ROWS ========== */
+  /* Each row has a pill-label so Khalid can read without explanation. */
+  .priority-asin { font-size: 11px; color: var(--accent); font-family: 'Cascadia Code','Fira Code',monospace; }
+  .pc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 5px; font-size: 12px; color: var(--text); }
+  .pc-label {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-muted); background: rgba(124,141,176,0.12);
+    padding: 1px 5px; border-radius: 3px; flex-shrink: 0;
+  }
+  .pc-value { color: var(--text); }
+  .pc-sep { color: var(--border); margin: 0 2px; }
+  /* Compact 6-column action center: column sizing hints */
+  .ac-col-signal { min-width: 120px; max-width: 200px; }
+  .ac-col-headline { min-width: 200px; }
+  .ac-col-action { min-width: 180px; max-width: 260px; }
+  .ac-col-owner { min-width: 100px; }
+  .ac-col-sla { min-width: 130px; }
+  .ac-col-status { min-width: 100px; }
+  .ac-type-lbl { font-size: 10px; color: var(--text-muted); margin-top: 3px; display: block; }
+  .ac-time-lbl { font-size: 10px; color: var(--text-muted); margin-top: 3px; display: block; }
 </style>
 </head>
 <body>
@@ -510,7 +531,7 @@
       <span class="nav-icon">💰</span><span class="nav-label">P&amp;L (Gross)</span>
     </div>
     <div class="nav-item" data-page="signals">
-      <span class="nav-icon">🔔</span><span class="nav-label">Signal Inbox</span>
+      <span class="nav-icon">🎯</span><span class="nav-label">Action Center</span>
     </div>
     <div class="nav-item" data-page="scorecard">
       <span class="nav-icon">🏆</span><span class="nav-label">Scorecard</span>
@@ -523,7 +544,7 @@
     <!-- TOP BAR -->
     <div id="topbar">
       <button id="sidebar-toggle" title="Toggle sidebar">☰</button>
-      <div id="topbar-title">GM Control <span>Dashboard</span></div>
+      <div id="topbar-title">GM Control <span>Tower</span></div>
       <div class="mp-selector" id="mp-selector">
         <button class="mp-btn active" data-mp="UK">🇬🇧 UK</button>
         <button class="mp-btn" data-mp="US">🇺🇸 US</button>
@@ -1029,6 +1050,27 @@ async function loadHomeKPIs(mp) {
 //  PAGE: HOME — Today's GM Priorities
 //  Top 6 highest-severity OPEN signals → click to drill into Action Center.
 // ============================================================
+
+// Builds one priority card DOM string.
+// Labeled rows: OWNER · ACTION · TASK · SLA — readable without explanation.
+function buildPriorityCard(r) {
+  const sev = (r.severity||'').toUpperCase();
+  const owner = r.owner_name || r.owner_role || '—';
+  const rec = recommendationFor(r.signal_type, r.recommendation);
+  const cu = (r.clickup_task_id || r.clickup_task_url)
+    ? clickupLink(r.clickup_task_id, r.clickup_task_url)
+    : '<span class="clickup-missing">no task yet</span>';
+  const sla = slaPill(r.created_at, r.severity);
+  const asin = r.asin ? `<span class="priority-asin">${r.asin}</span>` : '';
+  return `<div class="priority-card sev-${sev}" onclick="switchPage('signals')" title="Click to open Action Center">
+    <div class="priority-card-top">${sevBadge(sev)} ${asin} ${sla}</div>
+    <div class="priority-card-headline">${esc(r.headline || '—')}</div>
+    <div class="pc-row"><span class="pc-label">Owner</span><span class="pc-value">${esc(owner)}</span></div>
+    <div class="pc-row"><span class="pc-label">Action</span><span class="pc-value">${esc(rec)}</span></div>
+    <div class="pc-row"><span class="pc-label">Task</span>${cu}</div>
+  </div>`;
+}
+
 async function loadGMPriorities(mp) {
   const el = $('priority-body');
   const meta = $('priority-meta');
@@ -1048,30 +1090,24 @@ async function loadGMPriorities(mp) {
       el.innerHTML = '<div class="priority-empty">✅ No open priorities. Inbox is clear.</div>';
       return;
     }
-    meta.textContent = rows.length + ' open · click to triage';
-    el.innerHTML = '<div class="priority-grid">' + rows.map(r => {
-      const sev = (r.severity||'').toUpperCase();
-      const owner = r.owner_name || r.owner_role || '—';
-      const rec = recommendationFor(r.signal_type, r.recommendation);
-      const sla = slaPill(r.created_at, r.severity);
-      return `<div class="priority-card sev-${sev}" onclick="switchPage('signals')">
-        <div class="priority-card-top">
-          ${sevBadge(sev)}
-          ${sla}
-        </div>
-        <div class="priority-card-headline">${r.headline || '—'}</div>
-        <div class="priority-card-meta">
-          <span class="mono">${r.asin || '—'}</span>
-          <span>·</span>
-          <span>${owner}</span>
-          <span>·</span>
-          <span>${rec}</span>
-        </div>
-      </div>`;
-    }).join('') + '</div>';
+    meta.textContent = rows.length + ' open · click any card to triage in Action Center';
+    el.innerHTML = '<div class="priority-grid">' + rows.map(r => buildPriorityCard(r)).join('') + '</div>';
   } catch(e) {
-    meta.textContent = 'inbox unavailable';
-    el.innerHTML = `<div class="priority-empty">Signal Inbox not reachable. ${e.message ? '<br><span class="td-muted">'+e.message+'</span>' : ''}</div>`;
+    // Show realistic demo cards when inbox is not reachable — for demo/presentation use.
+    const now = Date.now();
+    const DEMO = [
+      { severity:'CRITICAL', signal_type:'ppc_waste',     asin:'B0BTT1N8XK',
+        headline:'PPC Waste: £48 spent · 0 orders · Moss Pole Auto Campaign',
+        owner_name:'Khalid', status:'new', clickup_task_id:'', created_at: new Date(now - 6*3600*1000).toISOString() },
+      { severity:'HIGH',     signal_type:'high_acos',     asin:'B08QCFJ7JC',
+        headline:'High ACOS: 61% vs target 22% · Auger Drill Bit (7d)',
+        owner_name:'Khalid', status:'validated', clickup_task_id:'CU-1042', created_at: new Date(now - 18*3600*1000).toISOString() },
+      { severity:'HIGH',     signal_type:'low_inventory', asin:'B06XVZ6F2C',
+        headline:'Low Stock: Beard Shaper · DOI 11 days · active PPC spend £14/day',
+        owner_name:'Ops', status:'validated', clickup_task_id:'', created_at: new Date(now - 9*3600*1000).toISOString() },
+    ];
+    meta.textContent = 'demo data · inbox unavailable';
+    el.innerHTML = '<div class="priority-grid">' + DEMO.map(r => buildPriorityCard(r)).join('') + '</div>';
   }
 }
 
@@ -1857,19 +1893,36 @@ async function loadSignals(mp) {
   $('signals-meta').textContent = rows ? rows.length + ' open signals' : 'Table not yet active';
 
   if (!rows) {
+    // Demo placeholder — shows realistic SLA states: BREACHED · WARNING · ON TRACK
+    const _now = Date.now();
     el.innerHTML = `
       <div class="placeholder-banner">
-        ℹ️ Signal Inbox table not reachable. Showing example signals.
+        ℹ️ Showing demo signals — Signal Inbox table not reachable.
       </div>` + renderActionCenter([
-        { severity:'CRITICAL', signal_type:'stock_out_risk', marketplace_code:'UK',
-          asin:'B08XYZ1234', headline:'Laevo Posture Corrector — 8 days of supply remaining',
-          owner_name:'GM', status:'new', created_at: new Date(Date.now() - 2*3600*1000).toISOString() },
-        { severity:'HIGH', signal_type:'acos_spike', marketplace_code:'US',
-          asin:'B09ABC5678', headline:'Gymbee Resistance Bands — ACOS jumped to 67% (7d avg)',
-          owner_name:'PPC MGR', status:'validated', created_at: new Date(Date.now() - 5*3600*1000).toISOString() },
-        { severity:'MEDIUM', signal_type:'review_drop', marketplace_code:'CA',
-          asin:'B07DEF9012', headline:'cinch! Ankle Support — Rating fell from 4.5 → 4.1',
-          owner_name:'BRAND MGR', status:'validated_pending_owner', created_at: new Date(Date.now() - 26*3600*1000).toISOString() },
+        { severity:'CRITICAL', signal_type:'ppc_waste',
+          asin:'B0BTT1N8XK',
+          headline:'PPC Waste: £48 spent · 0 orders · Moss Pole Auto Campaign',
+          owner_name:'Khalid', status:'new',
+          clickup_task_id: '',
+          created_at: new Date(_now - 6*3600*1000).toISOString() },   // 6h ago → BREACHED (CRITICAL SLA=4h)
+        { severity:'HIGH', signal_type:'high_acos',
+          asin:'B08QCFJ7JC',
+          headline:'High ACOS: 61% vs target 22% · Auger Drill Bit (7d)',
+          owner_name:'Khalid', status:'validated',
+          clickup_task_id: 'CU-1042',
+          created_at: new Date(_now - 18*3600*1000).toISOString() },  // 18h ago → WARNING (HIGH SLA=24h, 75% elapsed)
+        { severity:'HIGH', signal_type:'low_inventory',
+          asin:'B06XVZ6F2C',
+          headline:'Low Stock: Beard Shaper · DOI 11 days · PPC spend £14/day active',
+          owner_name:'Ops', status:'validated',
+          clickup_task_id: 'CU-1039',
+          created_at: new Date(_now - 8*3600*1000).toISOString() },   // 8h ago → ON TRACK (HIGH SLA=24h, 33% elapsed)
+        { severity:'MEDIUM', signal_type:'review_drop',
+          asin:'B0CH8XCTG4',
+          headline:'Review Drop: Rating 4.5 → 4.1 · 3 recent 1-star reviews',
+          owner_name:'Amna', status:'validated_pending_owner',
+          clickup_task_id: '',
+          created_at: new Date(_now - 24*3600*1000).toISOString() },  // 24h ago → ON TRACK (MEDIUM SLA=72h)
       ], true);
     return;
   }
@@ -1882,15 +1935,27 @@ async function loadSignals(mp) {
   el.innerHTML = renderActionCenter(rows, false);
 }
 
-// Action Center renderer — used by both real and placeholder data paths.
+// Minimal HTML escaper for inserting user/DB text into innerHTML.
+function esc(s) {
+  return String(s ?? '—')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Action Center renderer — 6 columns, fits one screen without horizontal scroll.
+// Columns: Signal | Alert | Recommended Action | Owner / Task | SLA | Status
 function renderActionCenter(rows, isPlaceholder) {
   const tbodyCls = isPlaceholder ? 'placeholder-row' : '';
   return `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Severity</th><th>Type</th><th>ASIN</th>
-      <th>Signal</th><th>Recommendation</th>
-      <th>Owner</th><th>ClickUp</th>
-      <th>SLA</th><th>Lifecycle</th><th>Created</th>
+      <th class="ac-col-signal">Signal</th>
+      <th class="ac-col-headline">Alert</th>
+      <th class="ac-col-action">Recommended Action</th>
+      <th class="ac-col-owner">Owner / Task</th>
+      <th class="ac-col-sla">SLA</th>
+      <th class="ac-col-status">Status</th>
     </tr></thead>
     <tbody class="${tbodyCls}">
     ${rows.map(r => {
@@ -1898,17 +1963,27 @@ function renderActionCenter(rows, isPlaceholder) {
       const owner = r.owner_name || r.owner_role || '—';
       const rec = recommendationFor(r.signal_type, r.recommendation);
       const cu = clickupLink(r.clickup_task_id, r.clickup_task_url);
+      const headline = esc(r.headline || '—');
+      const asin = r.asin ? `<span class="mono" style="font-size:11px;color:var(--accent);">${esc(r.asin)}</span>` : '';
       return `<tr class="${sevCls}">
-        <td>${sevBadge(r.severity)}</td>
-        <td><span class="badge badge-gray">${r.signal_type||'—'}</span></td>
-        <td class="mono">${r.asin||'—'}</td>
-        <td><span class="truncate" style="max-width:260px;display:block;" title="${(r.headline||'').replace(/"/g,'&quot;')}">${r.headline||'—'}</span></td>
-        <td><div class="ac-recommend">${rec}</div></td>
-        <td><span class="badge badge-blue">${owner}</span></td>
-        <td>${cu}</td>
-        <td>${slaPill(r.created_at, r.severity)}</td>
-        <td>${lifecycleBadge(r.status)}</td>
-        <td class="td-muted">${fmt.relTime(r.created_at)}</td>
+        <td class="ac-col-signal">
+          ${sevBadge(r.severity)}
+          <span class="ac-type-lbl">${esc(r.signal_type||'—')}</span>
+        </td>
+        <td class="ac-col-headline">
+          ${asin}
+          <span class="truncate" style="max-width:280px;display:block;margin-top:2px;" title="${esc(r.headline||'')}">${headline}</span>
+        </td>
+        <td class="ac-col-action"><div class="ac-recommend">${esc(rec)}</div></td>
+        <td class="ac-col-owner">
+          <span class="badge badge-blue">${esc(owner)}</span>
+          <span class="ac-time-lbl">${cu}</span>
+        </td>
+        <td class="ac-col-sla">${slaPill(r.created_at, r.severity)}</td>
+        <td class="ac-col-status">
+          ${lifecycleBadge(r.status)}
+          <span class="ac-time-lbl">${fmt.relTime(r.created_at)}</span>
+        </td>
       </tr>`;
     }).join('')}
     </tbody></table></div>`;
