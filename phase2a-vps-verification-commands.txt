@@ -1,0 +1,121 @@
+GM CONTROL TOWER — PHASE 2A VPS-SIDE VERIFICATION COMMANDS
+===========================================================
+Date: 2026-04-27
+Status: Awaiting VPS output — sandbox has no SSH access
+
+No SSH keys, no ~/.ssh/config, no credentials to production VPS found in this environment.
+Run the commands below on the production server and paste output back for analysis.
+
+===========================================================
+1. DASHBOARD FILE — /var/www/html/omnisec/gm-dashboard.html
+===========================================================
+
+grep -c "Safe Review\|Manual Review Queue\|Assign Preview\|hooks/task-create\|api\.clickup\.com\|create-ppc-signal\|proof-of-life" \
+  /var/www/html/omnisec/gm-dashboard.html
+
+grep -n "Safe Review\|Manual Review Queue\|Assign Preview" /var/www/html/omnisec/gm-dashboard.html
+
+grep -n "api\.clickup\.com\|create-ppc-signal\|proof-of-life" /var/www/html/omnisec/gm-dashboard.html
+
+grep -n "hooks/task-create" /var/www/html/omnisec/gm-dashboard.html
+
+grep -n "fetch(" /var/www/html/omnisec/gm-dashboard.html | grep -v "bqQuery\|BQ_PROXY\|/api"
+
+
+===========================================================
+2. BQ-PROXY FILE — /usr/local/bin/bq-proxy.py
+===========================================================
+
+grep -n "app.run\|host=\|127\.0\.0\.1\|0\.0\.0\.0" /usr/local/bin/bq-proxy.py
+
+grep -n "create-ppc-signal\|proof-of-life\|proof_of_life\|create_ppc" /usr/local/bin/bq-proxy.py
+
+grep -n "_DML_PATTERN\|DML.*block\|blocklist" /usr/local/bin/bq-proxy.py
+
+grep -n "maximumBytesBilled\|maximum_bytes_billed" /usr/local/bin/bq-proxy.py
+
+grep -n "eyJ" /usr/local/bin/bq-proxy.py | sed 's/eyJ[^'"'"'"[:space:]]*/[REDACTED]/g'
+
+grep -n "MODE_CREATE\|mode_create" /usr/local/bin/bq-proxy.py
+
+grep -n "@app.route" /usr/local/bin/bq-proxy.py
+
+
+===========================================================
+3. ENDPOINTS
+===========================================================
+Expected: create-ppc-signal = 404, proof-of-life = 404, clickup-signals = 200
+
+curl -s -o /dev/null -w "create-ppc-signal: %{http_code}\n" http://127.0.0.1:8181/create-ppc-signal
+
+curl -s -o /dev/null -w "proof-of-life: %{http_code}\n" http://127.0.0.1:8181/proof-of-life
+
+curl -s -o /dev/null -w "clickup-signals: %{http_code}\n" http://127.0.0.1:8181/clickup-signals
+
+
+===========================================================
+4. N8N WORKFLOW STATE
+===========================================================
+Expected: tg1a_dryrun_001 active, high-acos-openclaw-v2 disabled, MODE_CREATE_ENABLED=false
+
+sqlite3 /root/.n8n/database.sqlite \
+  "SELECT name, active FROM workflow_entity WHERE name IN ('tg1a_dryrun_001','high-acos-openclaw-v2','task-create') ORDER BY name;" \
+  2>/dev/null || echo "sqlite3 path may differ -- try: find / -name database.sqlite 2>/dev/null | grep n8n"
+
+grep -r "MODE_CREATE_ENABLED" /root/.n8n/ /etc/bq-proxy.env /etc/n8n.env 2>/dev/null
+
+
+===========================================================
+5. PORTS / SECURITY
+===========================================================
+Expected: 5678 on 127.0.0.1 only, 8181 on 127.0.0.1 only, 8184 not externally exposed
+
+ss -tlnp | grep -E ':5678|:8184|:8181|:80|:443'
+
+ufw status numbered 2>/dev/null
+
+iptables -S DOCKER-USER 2>/dev/null
+
+iptables-save 2>/dev/null | grep -E '5678|8184|8181'
+
+
+===========================================================
+6. TASK-GATEWAY-DB — port 8184
+===========================================================
+
+curl -s http://127.0.0.1:8184/health 2>/dev/null || echo "8184: no response"
+
+ss -tlnp | grep 8184
+
+find / -name "task-gateway*.db" -o -name "gateway*.sqlite" 2>/dev/null | head -5
+
+sqlite3 $(find / -name "task-gateway*.db" 2>/dev/null | head -1) \
+  "PRAGMA journal_mode; SELECT COUNT(*) as pending FROM tasks WHERE status='pending_create';" 2>/dev/null
+
+
+===========================================================
+7. SIDE EFFECTS — ClickUp + BigQuery write audit
+===========================================================
+
+grep -n "keepa.insert\|insertAll\|clickup.*POST\|create_clickup\|create.clickup\|clickup.*task" \
+  /usr/local/bin/bq-proxy.py | grep -v "^#" | head -20
+
+# ClickUp recent tasks — DO NOT print CLICKUP_KEY.
+# Run only if comfortable. Replace LIST_ID if needed (901807727054 = PPC list):
+#
+# CU_KEY=$(grep CLICKUP_KEY /etc/bq-proxy.env | cut -d= -f2)
+# curl -s -H "Authorization: $CU_KEY" \
+#   "https://api.clickup.com/api/v2/list/901807727054/task?order_by=created&reverse=true&page=0&limit=10" \
+#   | python3 -m json.tool | grep -E '"name"|"date_created"' | head -20
+
+
+===========================================================
+INSTRUCTIONS
+===========================================================
+1. Run each block on the production server.
+2. Paste the full output back.
+3. A complete PASS / PARTIAL PASS / FAIL report with evidence
+   table, risks, and recommended containment steps will be returned.
+
+Do not paste CLICKUP_KEY, BQ_REFRESH_TOKEN, or any other secret values.
+Redact or skip any command that would expose credentials.
