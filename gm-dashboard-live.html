@@ -670,8 +670,19 @@
   margin-top: 12px;
   white-space: pre-wrap;
   font-family: monospace;
+  max-height: 320px;
+  overflow-y: auto;
 }
 .pc-modal-preview-box strong { color: #e2e8f0; font-family: inherit; }
+.pc-modal-approval {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.pc-modal-approval input { margin-top: 2px; }
 .pc-modal-mode-badge {
   display: inline-block;
   padding: 2px 8px;
@@ -1299,6 +1310,10 @@
     <textarea id="pc-tf-notes" rows="2" maxlength="500"
               placeholder="Additional context&#8230;"></textarea>
     <div id="pc-modal-preview-box" class="pc-modal-preview-box" style="display:none;"></div>
+    <label id="pc-modal-approval-wrap" class="pc-modal-approval" style="display:none;">
+      <input type="checkbox" id="pc-modal-approval" onchange="pcSetApproval(this.checked)" />
+      I reviewed the full task brief and approve creating this ClickUp task.
+    </label>
     <div class="pc-scope-note">
       &#9989; Stage C.1 — Preview then Create in GM Control Tower (Profit Control triage inbox).<br>
       &#10060; Will NOT do: BigQuery writes &#183; OpenClaw &#183; Ads &#183; Seller Central &#183; signal_inbox changes.
@@ -4018,6 +4033,8 @@ const PC_ISSUE_DEFAULTS = {
 
 let _pcRow      = null;
 let _pcPreviewed = false;
+let _pcApproved = false;
+let _pcPreviewPayload = null;
 
 function pcOpenTaskModal(row) {
   // Remap issue_type from confidence when row is from a generic table
@@ -4038,13 +4055,17 @@ function pcOpenTaskModal(row) {
 
   $('pc-modal-preview-box').style.display = 'none';
   $('pc-modal-preview-box').innerHTML     = '';
+  $('pc-modal-approval-wrap').style.display = 'none';
+  $('pc-modal-approval').checked = false;
+  _pcApproved = false;
+  _pcPreviewPayload = null;
   $('pc-task-modal-msg').textContent      = '';
   $('pc-task-modal-msg').className        = '';
   $('pc-modal-mode-badge').textContent    = 'PREVIEW ONLY';
   $('pc-modal-mode-badge').className      = 'pc-modal-mode-badge';
   // Reset Create button
   const createBtn = $('pc-btn-create');
-  if (createBtn) { createBtn.classList.remove('ready'); createBtn.disabled = false; createBtn.textContent = '✓ Create Task'; }
+  if (createBtn) { createBtn.classList.remove('ready'); createBtn.disabled = true; createBtn.textContent = '✓ Create Task'; }
   $('pc-btn-preview').disabled = false;
 
   $('pc-task-modal-overlay').classList.add('open');
@@ -4055,6 +4076,30 @@ function pcCloseModal(evt, force) {
   $('pc-task-modal-overlay').classList.remove('open');
   _pcRow       = null;
   _pcPreviewed = false;
+  _pcApproved = false;
+  _pcPreviewPayload = null;
+}
+
+function pcMarkPreviewDirty() {
+  if (!_pcPreviewed && !_pcApproved && !_pcPreviewPayload) return;
+  _pcPreviewed = false;
+  _pcApproved = false;
+  _pcPreviewPayload = null;
+
+  const approvalWrap = $('pc-modal-approval-wrap');
+  const approval = $('pc-modal-approval');
+  if (approvalWrap) approvalWrap.style.display = 'none';
+  if (approval) approval.checked = false;
+
+  const createBtn = $('pc-btn-create');
+  if (createBtn) {
+    createBtn.classList.remove('ready');
+    createBtn.disabled = true;
+    createBtn.textContent = '✓ Create Task';
+  }
+
+  $('pc-modal-mode-badge').textContent = 'PREVIEW ONLY';
+  pcShowMsg('Fields changed — please preview again before creating.', 'err');
 }
 
 function pcBuildDescription(row, sym) {
@@ -4122,6 +4167,8 @@ async function pcSubmitPreview() {
 
     const preview = data.preview || {};
     const box = $('pc-modal-preview-box');
+    const listName = preview.list_name || 'GM Control Tower';
+    const notesHandling = payload.notes ? 'will be added as first ClickUp comment' : 'none';
     box.innerHTML =
       `<strong>Preview (not created)</strong>
 
@@ -4142,22 +4189,28 @@ async function pcSubmitPreview() {
 ` +
       `Due:         ${pcEsc(payload.due_hours + 'h from now')}
 ` +
-      `List:        ${pcEsc(preview.list_name || 'GM Control Tower')}
+      `List:        ${pcEsc(listName)}
 ` +
       `Tags:        ${(preview.tags || []).map(pcEsc).join(', ')}
 ` +
-      `Notes:       ${pcEsc(preview.notes_handling || ($('pc-tf-notes').value.trim() ? 'will be added as first ClickUp comment' : 'no notes — no comment will be created'))}
+      `Notes handling: ${pcEsc(notesHandling)}
 ` +
       `
-✅ Ready to create in ${pcEsc(preview.list_name || 'GM Control Tower')}.`;
+Full Description / Task Brief:
+${pcEsc(payload.description)}
+
+✅ Review the full brief, approve, then create in GM Control Tower.`;
     box.style.display = '';
 
     _pcPreviewed = true;
-    $('pc-modal-mode-badge').textContent = 'PREVIEW OK';
-    pcShowMsg('Preview OK — click "Create Task" to submit.', 'ok');
-    // Enable Create button
+    _pcApproved = false;
+    _pcPreviewPayload = payload;
+    $('pc-modal-approval').checked = false;
+    $('pc-modal-approval-wrap').style.display = 'flex';
+    $('pc-modal-mode-badge').textContent = 'AWAITING APPROVAL';
+    pcShowMsg('Preview OK — review and approve before creating.', 'ok');
     const createBtn = $('pc-btn-create');
-    if (createBtn) { createBtn.classList.add('ready'); }
+    if (createBtn) { createBtn.classList.remove('ready'); createBtn.disabled = true; }
 
   } catch (e) {
     pcShowMsg('Preview failed: ' + e.message, 'err');
@@ -4167,40 +4220,46 @@ async function pcSubmitPreview() {
   }
 }
 
+function pcSetApproval(approved) {
+  _pcApproved = !!approved;
+  const createBtn = $('pc-btn-create');
+  if (!createBtn) return;
+
+  if (_pcPreviewed && _pcApproved && _pcPreviewPayload) {
+    createBtn.classList.add('ready');
+    createBtn.disabled = false;
+    $('pc-modal-mode-badge').textContent = 'APPROVED';
+    pcShowMsg('Approved — click Create Task to submit.', 'ok');
+  } else {
+    createBtn.classList.remove('ready');
+    createBtn.disabled = true;
+    if (_pcPreviewed) $('pc-modal-mode-badge').textContent = 'AWAITING APPROVAL';
+  }
+}
+
 async function pcSubmitCreate() {
-  if (!_pcRow || !_pcPreviewed) return;
+  if (!_pcRow || !_pcPreviewed || !_pcApproved || !_pcPreviewPayload) {
+    return pcShowMsg('Review and approve the preview before creating.', 'err');
+  }
   const btn = $('pc-btn-create');
   btn.disabled    = true;
   btn.textContent = 'Creating…';
   pcShowMsg('', '');
 
-  const title    = $('pc-tf-title').value.trim();
-  const assignee = $('pc-tf-assignee').value;
-  const dueHours = Number($('pc-tf-due').value);
-
-  if (!title)    { btn.disabled = false; btn.textContent = '✓ Create Task'; return pcShowMsg('Task title is required.', 'err'); }
-  if (!assignee) { btn.disabled = false; btn.textContent = '✓ Create Task'; return pcShowMsg('Please select an assignee.', 'err'); }
+  const dueHours = Number(_pcPreviewPayload.due_hours);
 
   // Calculate ISO due_date from due_hours
   const dueDate = new Date(Date.now() + dueHours * 3600 * 1000).toISOString().slice(0, 10);
 
   const payload = {
-    source_page:     'profit_control',
-    issue_type:      _pcRow.issue_type,
-    store_id:        _pcRow.store_id,
-    marketplace:     _pcRow.marketplace,
-    asin:            _pcRow.asin,
-    brand:           _pcRow.brand || '',
-    confidence_tier: _pcRow.confidence_tier || 'UNKNOWN',
-    title:           title,
-    description:     pcBuildDescription(_pcRow, fmt.mpSym(_pcRow.marketplace)),
-    notes:           $('pc-tf-notes').value.trim(),
-    assignee_id:     assignee,
-    priority:        Number($('pc-tf-priority').value),
-    due_date:        dueDate,
-    mode:            'create',
-    confirmed:       true,
+    ..._pcPreviewPayload,
+    mode:      'create',
+    confirmed: true,
   };
+  delete payload.due_hours;
+  payload.due_date = dueDate;
+  const title = payload.title || '';
+  const assignee = payload.assignee_id || '';
 
   try {
     const res  = await fetch('/hooks/task-create', {
@@ -4265,6 +4324,15 @@ function pcShowMsg(msg, cls) {
 function pcEsc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+['pc-tf-title', 'pc-tf-notes'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('input', pcMarkPreviewDirty);
+});
+['pc-tf-assignee', 'pc-tf-priority', 'pc-tf-due'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('change', pcMarkPreviewDirty);
+});
 
 //  END PROFIT CONTROL v0.2
 // ─────────────────────────────────────────────────────────────
