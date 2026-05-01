@@ -1,0 +1,4322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GM Control Dashboard — K-Brands</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  /* ========== RESET & BASE ========== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #20233a;
+    --border: #2a2d3e;
+    --accent: #4f8ef7;
+    --accent2: #6c63ff;
+    --text: #e2e8f0;
+    --text-muted: #7c8db0;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --orange: #f97316;
+    --sidebar-w: 210px;
+    --topbar-h: 56px;
+  }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* ========== SCROLLBAR ========== */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ========== LAYOUT ========== */
+  #app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ========== SIDEBAR ========== */
+  #sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.25s ease;
+    z-index: 100;
+  }
+  #sidebar.collapsed { width: 56px; min-width: 56px; }
+  .sidebar-logo {
+    padding: 18px 16px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-logo .logo-icon { font-size: 18px; flex-shrink: 0; }
+  .sidebar-logo .logo-text { transition: opacity 0.2s; }
+  #sidebar.collapsed .logo-text { opacity: 0; pointer-events: none; }
+  .sidebar-section-title {
+    padding: 16px 16px 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity 0.2s;
+  }
+  #sidebar.collapsed .sidebar-section-title { opacity: 0; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 6px;
+    margin: 2px 8px;
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .nav-item:hover { background: var(--card2); color: var(--text); }
+  .nav-item.active { background: rgba(79,142,247,0.15); color: var(--accent); }
+  .nav-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+  .nav-label { transition: opacity 0.2s; font-size: 13px; }
+  #sidebar.collapsed .nav-label { opacity: 0; pointer-events: none; }
+
+  /* ========== MAIN AREA ========== */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ========== TOP BAR ========== */
+  #topbar {
+    height: var(--topbar-h);
+    min-height: var(--topbar-h);
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+  }
+  #sidebar-toggle { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 4px; }
+  #sidebar-toggle:hover { background: var(--card2); color: var(--text); }
+  #topbar-title { font-size: 16px; font-weight: 700; color: var(--text); flex: 1; }
+  #topbar-title span { color: var(--accent); }
+  .mp-selector { display: flex; gap: 4px; }
+  .mp-btn {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .mp-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .mp-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #last-refresh { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  #refresh-btn {
+    background: rgba(79,142,247,0.15);
+    border: 1px solid rgba(79,142,247,0.3);
+    color: var(--accent);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #refresh-btn:hover { background: rgba(79,142,247,0.25); }
+  #refresh-btn.spinning .ri { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ========== CONTENT ========== */
+  #content { flex: 1; overflow-y: auto; padding: 24px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ========== CARDS ========== */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .card-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .card-delta { font-size: 12px; margin-top: 6px; }
+  .delta-up { color: var(--green); }
+  .delta-down { color: var(--red); }
+
+  /* ========== KPI GRID ========== */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+
+  /* ========== SECTION HEADER ========== */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .section-title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .section-meta { font-size: 11px; color: var(--text-muted); }
+
+  /* ========== TWO-COL ========== */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* ========== TABLES ========== */
+  .table-wrap { overflow-x: auto; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.03); }
+  tbody td { padding: 10px 12px; color: var(--text); vertical-align: middle; }
+  .td-muted { color: var(--text-muted); font-size: 12px; }
+
+  /* ========== BADGES ========== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .badge-orange { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.3); }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .badge-blue { background: rgba(79,142,247,0.15); color: var(--accent); border: 1px solid rgba(79,142,247,0.3); }
+  .badge-gray { background: rgba(124,141,176,0.15); color: var(--text-muted); border: 1px solid rgba(124,141,176,0.3); }
+  .badge-action { background: rgba(108,99,255,0.15); color: var(--accent2); border: 1px solid rgba(108,99,255,0.3); cursor: pointer; }
+
+  /* ========== DOI BADGE ========== */
+  .doi-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* ========== INVENTORY ALERT LIST ========== */
+  .inv-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
+  .inv-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--card2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .inv-item-info { flex: 1; min-width: 0; }
+  .inv-item-asin { font-size: 12px; font-weight: 700; color: var(--accent); }
+  .inv-item-name { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inv-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ========== SIGNAL CARDS ========== */
+  .signal-row-critical td:first-child { border-left: 3px solid var(--red); }
+  .signal-row-high td:first-child { border-left: 3px solid var(--orange); }
+  .signal-row-medium td:first-child { border-left: 3px solid var(--yellow); }
+
+  /* ========== INVENTORY RISK GRID ========== */
+  .risk-section { margin-bottom: 24px; }
+  .risk-section-title { font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 6px; margin-bottom: 12px; display: inline-block; }
+  .risk-critical { background: rgba(239,68,68,0.15); color: var(--red); }
+  .risk-high { background: rgba(249,115,22,0.15); color: var(--orange); }
+  .risk-medium { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .risk-ok { background: rgba(34,197,94,0.15); color: var(--green); }
+  .risk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .risk-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .risk-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+  .risk-card.sev-CRITICAL::before { background: var(--red); }
+  .risk-card.sev-HIGH::before { background: var(--orange); }
+  .risk-card.sev-MEDIUM::before { background: var(--yellow); }
+  .risk-card.sev-OK::before { background: var(--green); }
+  .risk-card-asin { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .risk-card-name { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .risk-card-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+  .risk-card-label { color: var(--text-muted); }
+  .risk-card-val { font-weight: 600; color: var(--text); }
+
+  /* ========== ACOS COLOR ========== */
+  .acos-green { color: var(--green); font-weight: 600; }
+  .acos-yellow { color: var(--yellow); font-weight: 600; }
+  .acos-red { color: var(--red); font-weight: 600; }
+
+  /* ========== LOADING / ERROR ========== */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    color: var(--text-muted);
+    text-align: center;
+    gap: 8px;
+  }
+  .error-icon { font-size: 28px; }
+  .error-msg { font-size: 13px; }
+  .error-detail { font-size: 11px; color: #4a5568; max-width: 400px; }
+
+  /* ========== PLACEHOLDER ========== */
+  .placeholder-row { opacity: 0.35; }
+  .placeholder-banner {
+    background: rgba(79,142,247,0.08);
+    border: 1px dashed rgba(79,142,247,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ========== TIER BADGES ========== */
+  .tier-HERO { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  .tier-CORE { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .tier-TAIL { background: rgba(124,141,176,0.15); color: var(--text-muted); border: 1px solid rgba(124,141,176,0.3); }
+  .tier-ZOMBIE { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .tier-STAR { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  /* ========== INVENTORY DATA STATUS BADGES ========== */
+  .inv-status-LIVE { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .inv-status-FALLBACK { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  .inv-status-UNRELIABLE { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .inv-data-status { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .inv-snapshot-mismatch { color: var(--yellow); font-size: 10px; }
+
+  /* ========== ETL HEALTH TABLE ========== */
+  .etl-panel { margin-top: 24px; }
+  .etl-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+  .etl-toggle:hover { color: var(--text); background: var(--card2); }
+  .etl-toggle .arrow { transition: transform 0.2s; display: inline-block; }
+  .etl-toggle.open .arrow { transform: rotate(90deg); }
+  .etl-body { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
+  .etl-body.open { max-height: 500px; }
+  .etl-health-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  .etl-health-table th { text-align: left; padding: 6px 10px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+  .etl-health-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .feed-OK { color: var(--green); font-weight: 700; }
+  .feed-PARTIAL { color: var(--yellow); font-weight: 700; }
+  .feed-FAILED { color: var(--red); font-weight: 700; }
+
+  .tier-WATCH { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.3); }
+  .tier-POOR { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .tier-UNKNOWN { background: rgba(124,141,176,0.1); color: var(--text-muted); border: 1px solid rgba(124,141,176,0.2); }
+  /* ========== STRATEGY BADGES ========== */
+  .strat-PUSH { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .strat-HOLD { background: rgba(79,142,247,0.15); color: var(--accent); border: 1px solid rgba(79,142,247,0.3); }
+  .strat-FIX { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.3); }
+  .strat-PARK { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  .strat-EXIT { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  /* ========== ACOS DELTA ========== */
+  .delta-neg { color: var(--green); font-weight: 600; font-size: 11px; }
+  .delta-pos { color: var(--red); font-weight: 600; font-size: 11px; }
+
+  /* ========== MOBILE ========== */
+  @media (max-width: 768px) {
+    #sidebar { width: 56px; min-width: 56px; }
+    #sidebar .logo-text, #sidebar .nav-label, #sidebar .sidebar-section-title { opacity: 0; pointer-events: none; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .two-col { grid-template-columns: 1fr; }
+    #topbar-title { font-size: 13px; }
+    .mp-btn { padding: 4px 8px; font-size: 11px; }
+  }
+  @media (max-width: 480px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+    #content { padding: 12px; }
+  }
+
+  /* ========== MISC ========== */
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+  .mono { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; }
+  .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  .empty-state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* Sortable table headers */
+    th.sortable { cursor: pointer; user-select: none; position: relative; padding-right: 18px !important; }
+    th.sortable:hover { background: var(--card-hover, rgba(255,255,255,0.05)); }
+    th.sortable::after { content: '\21C5'; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--text-muted); opacity: 0.5; }
+    th.sortable.asc::after { content: '\25B2'; opacity: 1; color: var(--accent, #60a5fa); }
+    th.sortable.desc::after { content: '\25BC'; opacity: 1; color: var(--accent, #60a5fa); }
+
+
+  /* ========== MANUAL REVIEW QUEUE (DRY-RUN ONLY) ========== */
+  .review-toolbar { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; padding:8px 10px; background:var(--card2); border:1px solid var(--border); border-radius:6px; font-size:12px; color:var(--text-muted); }
+  .review-dryrun-note { color: var(--yellow); font-weight: 600; }
+  .decision-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .review-btn { height:24px; padding:3px 9px; font-size:11px; font-weight:600; border-radius:5px; border:1px solid var(--border); background:var(--card2); color:var(--text); cursor:pointer; white-space:nowrap; }
+  .review-btn:hover { border-color: var(--accent); }
+  .review-btn.assign { background: var(--accent); border-color: var(--accent); color:#fff; }
+  .review-btn.ignore { color: var(--text-muted); }
+  .review-btn.needs-review { color: var(--yellow); }
+  .review-decision-note { margin-top:4px; font-size:10px; color:var(--text-muted); }
+  #task-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; display:flex; align-items:center; justify-content:center; }
+  #task-modal { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:22px; width:min(440px, calc(100vw - 28px)); box-shadow:0 8px 32px rgba(0,0,0,0.4); }
+  #task-modal label { display:block; font-size:11px; color:var(--text-muted); margin:10px 0 4px; }
+  #task-modal input[type="text"], #task-modal input[type="date"], #task-modal select, #task-modal textarea { width:100%; padding:8px 10px; background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none; }
+  #task-modal input:focus, #task-modal select:focus, #task-modal textarea:focus { border-color: var(--accent); }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
+  .btn-ghost { padding:8px 16px; background:transparent; color:var(--text-muted); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:13px; }
+  .btn-ghost:hover { color:var(--text); border-color:var(--text-muted); }
+  .btn-accent { padding:8px 16px; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; }
+  .btn-accent:hover { background: var(--accent2); }
+  .btn-accent:disabled { opacity:0.5; cursor:not-allowed; }
+  .modal-error { color:var(--red); font-size:12px; margin-bottom:8px; }
+  .modal-success { color:var(--green); font-size:12px; margin-bottom:8px; }
+
+
+  /* Phase 2A — Live Mode toggle */
+  #live-mode-bar { display:flex; align-items:center; gap:12px; padding:8px 16px;
+    background:var(--card); border-bottom:1px solid var(--border);
+    font-size:12px; color:var(--text-muted); }
+  #live-mode-bar.active { background:rgba(255,120,50,0.08); border-bottom-color:rgba(255,120,50,0.3); }
+  #live-mode-toggle-wrap { display:flex; align-items:center; gap:8px; }
+  #live-mode-switch { appearance:none; width:36px; height:20px; background:var(--border);
+    border-radius:10px; cursor:pointer; transition:background 0.2s; position:relative; }
+  #live-mode-switch:checked { background:#e05a00; }
+  #live-mode-switch::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px;
+    background:#fff; border-radius:50%; transition:transform 0.2s; }
+  #live-mode-switch:checked::after { transform:translateX(16px); }
+  #live-mode-label { font-weight:500; }
+  #live-mode-status { font-size:11px; }
+  #live-mode-warning { display:none; font-size:11px; color:#e05a00; }
+  #live-mode-bar.active #live-mode-warning { display:inline; }
+  /* Create task button */
+  .btn-create-task { padding:5px 12px; font-size:11px; background:var(--accent);
+    color:#fff; border:none; border-radius:5px; cursor:pointer; opacity:0.4;
+    pointer-events:none; transition:opacity 0.2s; }
+  .btn-create-task.enabled { opacity:1; pointer-events:auto; }
+  .btn-create-task.enabled:hover { background:var(--accent2); }
+  /* Modal mode tabs */
+  #modal-mode-indicator { font-size:10px; font-weight:600; letter-spacing:0.5px;
+    padding:3px 8px; border-radius:4px; margin-left:8px; }
+  #modal-mode-indicator.preview-mode { background:rgba(100,200,100,0.15); color:var(--green); }
+  #modal-mode-indicator.create-mode  { background:rgba(255,100,50,0.15); color:#e05a00; }
+  /* What-will-happen box */
+  #modal-action-scope { margin-top:12px; padding:10px 12px; border-radius:6px;
+    background:var(--bg); border:1px solid var(--border); font-size:11px;
+    color:var(--text-muted); line-height:1.6; }
+  #modal-action-scope .scope-yes { color:var(--green); }
+  #modal-action-scope .scope-no  { color:var(--red); }
+
+  /* ========== PROFIT CONTROL ========== */
+  .pc-fees-warning { background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:flex-start; gap:8px; }
+  .pc-fees-note { background:rgba(79,142,247,0.08); border:1px solid rgba(79,142,247,0.25); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:12px; color:var(--text-muted); }
+  .pc-waterfall-wrap { height:260px; position:relative; margin-bottom:4px; }
+
+/* ── Profit Control v0.2 ── */
+.pc-warn {
+  background: #fff3cd;
+  border-left: 4px solid #f0ad4e;
+  color: #7d5a00;
+  padding: 8px 14px;
+  margin: 0 0 12px 0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.pc-warn--fees {
+  background: #fce8e6;
+  border-left-color: #d93025;
+  color: #7a1f1a;
+}
+.pc-caveat {
+  font-size: 10px;
+  font-weight: 400;
+  color: #999;
+  font-style: italic;
+  margin-left: 4px;
+}
+.pc-missing {
+  color: #bbb;
+  font-style: italic;
+}
+.pc-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.pc-section {
+  margin-bottom: 28px;
+}
+/* ── Profit Confidence Badges ─────────────────────────── */
+.pc-confidence-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: #1e2130;
+  border: 1px solid #2d3148;
+  font-size: 13px;
+}
+.pc-confidence-bar .pcb-label {
+  color: #8892a4;
+  font-weight: 500;
+  margin-right: 4px;
+}
+.pc-confidence-bar .pcb-detail {
+  color: #8892a4;
+  font-size: 12px;
+  margin-left: auto;
+}
+.pc-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 18px;
+  vertical-align: middle;
+}
+.pc-badge--high      { background: #1a3a2a; color: #4ade80; border: 1px solid #166534; }
+.pc-badge--medium    { background: #2a2a10; color: #facc15; border: 1px solid #854d0e; }
+.pc-badge--low       { background: #2a1a10; color: #fb923c; border: 1px solid #9a3412; }
+.pc-badge--untrusted { background: #2a1020; color: #f87171; border: 1px solid #991b1b; }
+.pc-badge--nodata    { background: #1a1e2a; color: #64748b; border: 1px solid #334155; }
+.pc-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #333;
+}
+.pc-table-wrap {
+  overflow-x: auto;
+}
+.pc-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.pc-table-wrap th,
+.pc-table-wrap td {
+  text-align: right;
+  padding: 6px 10px;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+.pc-table-wrap th:first-child,
+.pc-table-wrap td:first-child,
+.pc-table-wrap th:nth-child(2),
+.pc-table-wrap td:nth-child(2) {
+  text-align: left;
+}
+.pc-table-wrap th {
+  background: #f7f8fa;
+  font-weight: 600;
+  color: #555;
+}
+.pc-table-wrap tr:hover td {
+  background: #f0f4ff;
+}
+.pc-neg {
+  color: #d93025;
+  font-weight: 600;
+}
+/* ── PC Task Button ──────────────────────────────────── */
+.pc-task-btn {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #334155;
+  background: #1e2130;
+  color: #94a3b8;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.pc-task-btn:hover {
+  background: #2d3148;
+  color: #e2e8f0;
+  border-color: #4f6080;
+}
+.pc-task-btn--urgent {
+  border-color: #991b1b;
+  color: #f87171;
+}
+.pc-task-btn--urgent:hover {
+  background: #2a1020;
+  color: #fca5a5;
+}
+.pc-task-btn--amber {
+  border-color: #854d0e;
+  color: #facc15;
+}
+.pc-task-btn--amber:hover {
+  background: #2a2a10;
+  color: #fde68a;
+}
+/* ── PC Task Modal ───────────────────────────────────── */
+#pc-task-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+}
+#pc-task-modal-overlay.open { display: flex; }
+#pc-task-modal {
+  background: #1a1e2e;
+  border: 1px solid #2d3148;
+  border-radius: 10px;
+  padding: 24px;
+  width: 480px;
+  max-width: 94vw;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+#pc-task-modal h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: #e2e8f0;
+}
+#pc-task-modal label {
+  display: block;
+  font-size: 12px;
+  color: #8892a4;
+  margin: 12px 0 4px;
+}
+#pc-task-modal input[type="text"],
+#pc-task-modal select,
+#pc-task-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0f1120;
+  border: 1px solid #2d3148;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+#pc-task-modal textarea { resize: vertical; min-height: 80px; }
+.pc-modal-preview-box {
+  background: #0f1120;
+  border: 1px solid #2d3148;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 12px;
+  white-space: pre-wrap;
+  font-family: monospace;
+}
+.pc-modal-preview-box strong { color: #e2e8f0; font-family: inherit; }
+.pc-modal-mode-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #2a2a10;
+  color: #facc15;
+  border: 1px solid #854d0e;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.pc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.pc-modal-actions .btn-ghost {
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: none;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.pc-modal-actions .btn-preview {
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #2d3148;
+  border: 1px solid #4f6080;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.pc-modal-actions .btn-create {
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #166534;
+  border: 1px solid #15803d;
+  color: #bbf7d0;
+  cursor: pointer;
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.pc-modal-actions .btn-create.ready {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pc-modal-actions .btn-create.ready:hover { background: #15803d; }
+.pc-modal-actions .btn-create:disabled { opacity: 0.4; pointer-events: none; }
+#pc-task-modal-msg {
+  margin-top: 10px;
+  font-size: 12px;
+  min-height: 16px;
+}
+#pc-task-modal-msg.ok  { color: #4ade80; }
+#pc-task-modal-msg.err { color: #f87171; }
+.pc-scope-note {
+  margin-top: 14px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #0f1120;
+  font-size: 11px;
+  color: #64748b;
+  border: 1px solid #1e2130;
+  line-height: 1.6;
+}
+/* ── End PC Task Stage A CSS ── */
+/* ── End Profit Control v0.2 CSS ── */
+</style>
+</head>
+<body>
+
+<!-- Phase 2A Live Mode bar — OFF by default on every page load -->
+<div id="live-mode-bar">
+  <div id="live-mode-toggle-wrap">
+    <input type="checkbox" id="live-mode-switch" onchange="onLiveModeToggle(this.checked)" />
+    <span id="live-mode-label">Live Mode</span>
+  </div>
+  <span id="live-mode-status">Preview Only</span>
+  <span id="live-mode-warning">⚠️ LIVE MODE — ClickUp task creation enabled. BigQuery and Ads remain read-only.</span>
+</div>
+<div id="app">
+
+  <!-- ========== SIDEBAR ========== -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">⚡</span>
+      <span class="logo-text">K-Brands GM</span>
+    </div>
+    <div class="sidebar-section-title">Navigation</div>
+    <div class="nav-item active" data-page="home">
+      <span class="nav-icon">🏠</span><span class="nav-label">Executive Home</span>
+    </div>
+    <div class="nav-item" data-page="ppc">
+      <span class="nav-icon">📊</span><span class="nav-label">PPC Control</span>
+    </div>
+    <div class="nav-item" data-page="inventory">
+      <span class="nav-icon">📦</span><span class="nav-label">Inventory Risk</span>
+    </div>
+    <div class="nav-item" data-page="pl">
+      <span class="nav-icon">💰</span><span class="nav-label">P&amp;L (Gross)</span>
+    </div>
+    <div class="nav-item" data-page="signals">
+      <span class="nav-icon">🔔</span><span class="nav-label">Signal Inbox</span>
+    </div>
+    <div class="nav-item" data-page="searchterms">
+      <span class="nav-icon">🔍</span><span class="nav-label">Search Terms</span>
+    </div>
+    <div class="nav-item" data-page="scorecard">
+      <span class="nav-icon">🏆</span><span class="nav-label">Scorecard</span>
+    </div>
+    <div class="nav-item" data-page="profitcontrol">
+      <span class="nav-icon">📉</span><span class="nav-label">Profit Control</span>
+    </div>
+  </nav>
+
+  <!-- ========== MAIN ========== -->
+  <div id="main">
+
+    <!-- TOP BAR -->
+    <div id="topbar">
+      <button id="sidebar-toggle" title="Toggle sidebar">☰</button>
+      <div id="topbar-title">GM Control <span>Dashboard</span></div>
+      <div class="mp-selector" id="mp-selector">
+        <button class="mp-btn active" data-mp="UK">🇬🇧 UK</button>
+        <button class="mp-btn" data-mp="US">🇺🇸 US</button>
+        <button class="mp-btn" data-mp="CA">🇨🇦 CA</button>
+        <button class="mp-btn" data-mp="DE">🇩🇪 DE</button>
+      </div>
+      <div id="data-as-of" style="font-size:10px;color:var(--text-muted);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);padding:3px 8px;border-radius:4px;white-space:nowrap;">Loading dates…</div>
+      <div id="last-refresh">Not yet loaded</div>
+      <button id="refresh-btn"><span class="ri">↻</span> Refresh</button>
+    </div>
+
+    <!-- CONTENT -->
+    <div id="content">
+
+      <!-- ===== PAGE: HOME ===== -->
+      <div class="page active" id="page-home">
+
+        <!-- KPI CARDS -->
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="card" id="kpi-revenue">
+            <div class="card-title">Revenue (7d)</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">ordered product sales</div>
+          </div>
+          <div class="card" id="kpi-spend">
+            <div class="card-title">PPC Spend (7d)</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">ad cost total</div>
+          </div>
+          <div class="card" id="kpi-acos">
+            <div class="card-title">Overall ACOS (7d)</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">spend / ad sales</div>
+          </div>
+          <div class="card" id="kpi-signals">
+            <div class="card-title">Active Signals</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">open in signal inbox</div>
+          </div>
+        </div>
+
+        <!-- BOTTOM TWO-COL -->
+        <div class="two-col">
+          <!-- Top Products -->
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Top Products by Revenue (7d)</div>
+              <div class="section-meta" id="top-products-meta"></div>
+            </div>
+            <div id="top-products-body">
+              <div class="loading"><div class="spinner"></div> Loading…</div>
+            </div>
+          </div>
+
+          <!-- Inventory Alerts -->
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Inventory Alerts</div>
+              <div class="section-meta">DOI &lt; 30 days</div>
+            </div>
+            <div id="inv-alerts-body">
+              <div class="loading"><div class="spinner"></div> Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GM ACTION CENTER -->
+        <div class="card" style="margin-top:16px;">
+          <div class="section-header">
+            <div class="section-title">🎯 Today's GM Action Center</div>
+            <div class="section-meta" id="action-center-meta"></div>
+          </div>
+          <div class="kpi-grid" style="margin-bottom:12px;" id="action-center-kpis">
+            <div class="card" id="ac-kpi-actioned" style="border:1px solid var(--border);">
+              <div class="card-title">Actioned Signals</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">total with ClickUp tasks</div>
+            </div>
+            <div class="card" id="ac-kpi-open" style="border:1px solid var(--border);">
+              <div class="card-title">Open Tasks</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">not yet done</div>
+            </div>
+            <div class="card" id="ac-kpi-overdue" style="border:1px solid var(--border);">
+              <div class="card-title">Overdue / Due Soon</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">due ≤ 48h or past due</div>
+            </div>
+            <div class="card" id="ac-kpi-done" style="border:1px solid var(--border);">
+              <div class="card-title">Done</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">completed tasks</div>
+            </div>
+          </div>
+          <div id="action-center-body">
+            <div class="loading"><div class="spinner"></div> Loading…</div>
+          </div>
+        </div>
+
+        <!-- COMPETITOR WATCH -->
+        <div class="card" style="margin-top:16px;">
+          <div class="section-header">
+            <div class="section-title">👁️ Competitor Watch <span style="font-size:12px;color:var(--text-muted);font-weight:400;">— BSR, price &amp; review movement</span></div>
+            <div class="section-meta" id="comp-watch-meta"></div>
+          </div>
+          <div class="kpi-grid" style="margin-bottom:12px;">
+            <div class="card" id="cw-kpi-bsr" style="border:1px solid var(--border);">
+              <div class="card-title">BSR Alerts</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">BSR worsened &gt;15%</div>
+            </div>
+            <div class="card" id="cw-kpi-price" style="border:1px solid var(--border);">
+              <div class="card-title">Price Changes</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">price moved &gt;10%</div>
+            </div>
+            <div class="card" id="cw-kpi-review" style="border:1px solid var(--border);">
+              <div class="card-title">Review Surges</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">reviews jumped &gt;20%</div>
+            </div>
+            <div class="card" id="cw-kpi-tracked" style="border:1px solid var(--border);">
+              <div class="card-title">Tracked ASINs</div>
+              <div class="card-value loading-val">—</div>
+              <div class="card-sub">own + competitors</div>
+            </div>
+          </div>
+          <div id="comp-watch-body">
+            <div class="loading"><div class="spinner"></div> Loading…</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== PAGE: PPC ===== -->
+      <div class="page" id="page-ppc">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-header">
+            <div class="section-title">🗑️ PPC Waste Finder <span style="font-size:12px;color:var(--text-muted);font-weight:400;">— ACOS &gt; 50% or no sales · spend &gt; 0 (14d)</span></div>
+            <div class="section-meta" id="waste-meta"></div>
+          </div>
+          <div id="waste-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title">📈 Campaign Performance (7d) — Top 20 by Spend</div>
+            <div class="section-meta" id="camp-meta"></div>
+          </div>
+          <div id="camp-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: INVENTORY ===== -->
+      <div class="page" id="page-inventory">
+        <div id="inv-warning-banner"></div>
+        <div id="inv-risk-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        <div class="etl-panel" id="etl-panel">
+          <div class="etl-toggle" id="etl-toggle" onclick="toggleETL()">
+            <span class="arrow">▶</span> ETL Feed Health (last 7 days)
+          </div>
+          <div class="etl-body" id="etl-body">
+            <div id="etl-health-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: P&L ===== -->
+      <div class="page" id="page-pl">
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title">💰 Gross P&amp;L by ASIN (7d)</div>
+            <div class="section-meta" id="pl-meta"></div>
+          </div>
+          <div id="pl-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: SIGNALS ===== -->
+      <div class="page" id="page-signals">
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title">🔔 Signal Inbox — Open Signals</div>
+            <div class="section-meta" id="signals-meta"></div>
+          </div>
+          <div id="signals-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: SEARCH TERMS CONTROL ===== -->
+      <div class="page" id="page-searchterms">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="font-size:16px;font-weight:600;">🔍 Search Terms Control</div>
+          <div id="st-freshness" style="font-size:10px;color:var(--text-muted);background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.25);padding:3px 8px;border-radius:4px;">Loading…</div>
+        </div>
+
+        <!-- WARNING BANNER -->
+        <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:flex-start;gap:8px;">
+          <span style="font-size:16px;flex-shrink:0;">⚠️</span>
+          <span style="color:var(--yellow);font-size:12px;line-height:1.5;">
+            <strong>Data attribution warning:</strong> PPC search-term metrics are keyword-level (pre-aggregated) and may be duplicated across ASIN rows.
+            Do not action ASIN-level bleeders or harvest candidates until ASIN attribution is validated.
+            Rows are auto-deduplicated below. Badges show data source: <span style="background:rgba(34,197,94,0.15);color:var(--green);padding:1px 5px;border-radius:3px;font-size:10px;">CLEAN</span>
+            <span style="background:rgba(245,158,11,0.15);color:var(--yellow);padding:1px 5px;border-radius:3px;font-size:10px;">KEYWORD_LEVEL</span>
+            <span style="background:rgba(79,142,247,0.15);color:var(--accent);padding:1px 5px;border-radius:3px;font-size:10px;">SQP_ASIN_LEVEL</span>
+            <span style="background:rgba(239,68,68,0.15);color:var(--red);padding:1px 5px;border-radius:3px;font-size:10px;">NOT_ACTION_READY</span>
+          </span>
+        </div>
+
+        <!-- KPI CARDS -->
+        <div class="kpi-grid">
+          <div class="card" id="st-kpi-bleeders">
+            <div class="card-title">Bleeder Spend</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">deduplicated keyword-level</div>
+          </div>
+          <div class="card" id="st-kpi-negatives">
+            <div class="card-title">Negative Candidates</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">needs PPC manager check</div>
+          </div>
+          <div class="card" id="st-kpi-harvest">
+            <div class="card-title">Harvest Candidates</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">not action-ready — verify attribution</div>
+          </div>
+          <div class="card" id="st-kpi-sqpgaps">
+            <div class="card-title">SQP Opportunity Gaps</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">high volume, low share</div>
+          </div>
+        </div>
+
+        <!-- BLEEDERS -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-header">
+            <div class="section-title">🗑️ PPC Bleeders <span style="font-size:12px;color:var(--text-muted);font-weight:400;">— deduplicated · spend &gt; £10, ACOS &gt; 80% or no sales · review manually</span></div>
+            <div class="section-meta" id="st-bleeders-meta"></div>
+          </div>
+          <div id="st-bleeders-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+
+        <!-- NEGATIVE KW CANDIDATES -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-header">
+            <div class="section-title">🚫 Negative KW Candidates <span style="font-size:12px;color:var(--text-muted);font-weight:400;">— deduplicated · validate in Amazon Ads before negating</span></div>
+            <div class="section-meta" id="st-negatives-meta"></div>
+          </div>
+          <div id="st-negatives-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+
+        <!-- HARVEST CANDIDATES -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-header">
+            <div class="section-title">🌾 Harvest Candidates <span style="font-size:12px;color:var(--text-muted);font-weight:400;">— NOT_ACTION_READY · attribution not ASIN-specific · verify in Amazon Ads Search Term Report</span></div>
+            <div class="section-meta" id="st-harvest-meta"></div>
+          </div>
+          <div id="st-harvest-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+
+        <!-- SQP OPPORTUNITY GAPS -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-header">
+            <div class="section-title">📈 SQP Opportunity Gaps <span style="font-size:12px;color:var(--text-muted);font-weight:400;">— ASIN-level SQP data · high volume, low click/purchase share</span></div>
+            <div class="section-meta" id="st-sqp-meta"></div>
+          </div>
+          <div id="st-sqp-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+
+        <!-- KEYWORD RANK MOVERS -->
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title">📉📈 Keyword Rank Movers <span style="font-size:12px;color:var(--text-muted);font-weight:400;">— biggest position changes this week · lower rank = better</span></div>
+            <div class="section-meta" id="st-movers-meta"></div>
+          </div>
+          <div id="st-movers-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: SCORECARD ===== -->
+      <div class="page" id="page-scorecard">
+        <!-- KPI cards -->
+        <div class="kpi-grid" id="sc-kpi-grid">
+          <div class="card" id="sc-kpi-revenue">
+            <div class="card-title">Total Revenue</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">latest week · active ASINs</div>
+          </div>
+          <div class="card" id="sc-kpi-profit">
+            <div class="card-title">Total Profit</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">estimated net profit</div>
+          </div>
+          <div class="card" id="sc-kpi-margin">
+            <div class="card-title">Avg Margin</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">weighted by revenue</div>
+          </div>
+          <div class="card" id="sc-kpi-asins">
+            <div class="card-title">Active ASINs</div>
+            <div class="card-value loading-val">—</div>
+            <div class="card-sub">with revenue &gt; 0</div>
+          </div>
+        </div>
+
+        <!-- Scorecard table -->
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title">🏆 Brand Scorecard</div>
+            <div class="section-meta" id="sc-meta"></div>
+          </div>
+          <div id="sc-body"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: PROFIT CONTROL ===== -->
+      <div class="page" id="page-profitcontrol">
+
+<!-- ── Profit Control v0.2 additions ── -->
+
+<!-- Warn bar: COGS coverage -->
+<div id="pc-warn-cogs" class="pc-warn" style="display:none">
+  ⚠️ COGS coverage below 50% for this store —
+  <strong>Est. Net Profit</strong> and <strong>Est. Net Margin</strong> are unreliable.
+  Rows with COGS: <span id="pc-cogs-coverage-label">—</span>
+</div>
+
+<!-- Warn bar: Fees missing -->
+<div id="pc-warn-fees" class="pc-warn pc-warn--fees" style="display:none">
+  ⚠️ Amazon fees data not populated for this store — fee-pressure table will be empty.
+</div>
+
+<!-- KPI Cards -->
+<div id="pc-confidence-badge" class="pc-confidence-bar" style="display:none;">
+  <!-- populated by loadPCKPIs -->
+</div>
+<div class="pc-kpi-row" id="pc-kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-label">Revenue (7d)</div>
+    <div class="kpi-value" id="pc-kpi-revenue">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Units Sold (7d)</div>
+    <div class="kpi-value" id="pc-kpi-units">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Gross Profit (7d)</div>
+    <div class="kpi-value" id="pc-kpi-gp">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Ad Spend (7d)</div>
+    <div class="kpi-value" id="pc-kpi-adspend">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">TACoS (7d)</div>
+    <div class="kpi-value" id="pc-kpi-tacos">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Est. Net Profit (7d) <span class="pc-caveat">est.</span></div>
+    <div class="kpi-value" id="pc-kpi-netprofit">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Est. Net Margin (7d) <span class="pc-caveat">est.</span></div>
+    <div class="kpi-value" id="pc-kpi-netmargin">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Refunds (7d)</div>
+    <div class="kpi-value" id="pc-kpi-refunds">—</div>
+  </div>
+</div>
+
+<!-- Worst 25 ASINs by Est. Net Profit -->
+<div class="pc-section">
+  <h3>
+    Worst 25 ASINs — Est. Net Profit (7d)
+    <span class="pc-caveat">estimated · COGS partial · from lowest 200 by net profit</span>
+  </h3>
+  <div id="pc-table-worst" class="pc-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Confidence</th>
+          <th>ASIN</th>
+          <th>Brand</th>
+          <th>Revenue</th>
+          <th>Units</th>
+          <th>Gross Profit</th>
+          <th>Ad Spend</th>
+          <th>TACoS</th>
+          <th>Est. Net Profit <span class="pc-caveat">est.</span></th>
+          <th>Est. Net Margin <span class="pc-caveat">est.</span></th>
+          <th>COGS rows</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="pc-tbody-worst">
+        <tr><td colspan="12">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Negative Margin ASINs -->
+<div class="pc-section">
+  <h3>
+    Negative Est. Net Margin ASINs (7d)
+    <span class="pc-caveat">estimated · COGS partial · based on lowest 200 ASINs by net profit</span>
+  </h3>
+  <div id="pc-table-negmargin" class="pc-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Confidence</th>
+          <th>ASIN</th>
+          <th>Brand</th>
+          <th>Revenue</th>
+          <th>Units</th>
+          <th>Est. Net Profit <span class="pc-caveat">est.</span></th>
+          <th>Est. Net Margin <span class="pc-caveat">est.</span></th>
+          <th>TACoS</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="pc-tbody-negmargin">
+        <tr><td colspan="9">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Fee Pressure ASINs -->
+<div class="pc-section">
+  <h3>
+    Fee Pressure ASINs — Highest Fee Rate % (7d)
+    <span class="pc-caveat">sorted by fees ÷ revenue · based on lowest 200 ASINs by net profit</span>
+  </h3>
+  <div id="pc-table-fees" class="pc-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Confidence</th>
+          <th>ASIN</th>
+          <th>Brand</th>
+          <th>Revenue</th>
+          <th>Amazon Fees</th>
+          <th>Fee Rate %</th>
+          <th>Ad Spend</th>
+          <th>Est. Net Profit <span class="pc-caveat">est.</span></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="pc-tbody-fees">
+        <tr><td colspan="9">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── PC Task Creation Modal (Stage A: preview-only) ── -->
+<div id="pc-task-modal-overlay" onclick="pcCloseModal(event)">
+  <div id="pc-task-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <h3>Create Task
+        <span id="pc-modal-mode-badge" class="pc-modal-mode-badge">PREVIEW ONLY</span>
+      </h3>
+      <button onclick="pcCloseModal(null,true)"
+        style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1;">&#215;</button>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:14px;">
+      Preview mode — no ClickUp task will be created.
+    </div>
+    <label>Task Title</label>
+    <input type="text" id="pc-tf-title" maxlength="200" />
+    <label>Assignee</label>
+    <select id="pc-tf-assignee">
+      <option value="">— select —</option>
+      <option value="113413890">Farid</option>
+      <option value="78169620">Amna</option>
+      <option value="107572818">Shaheer</option>
+      <option value="11406025">Bilal</option>
+    </select>
+    <label>Priority</label>
+    <select id="pc-tf-priority">
+      <option value="1">Urgent</option>
+      <option value="2" selected>High</option>
+      <option value="3">Normal</option>
+      <option value="4">Low</option>
+    </select>
+    <label>Due</label>
+    <select id="pc-tf-due">
+      <option value="24">24 hours</option>
+      <option value="48" selected>48 hours</option>
+      <option value="72">72 hours</option>
+      <option value="168">1 week</option>
+    </select>
+    <label>Notes (optional)</label>
+    <textarea id="pc-tf-notes" rows="2" maxlength="500"
+              placeholder="Additional context&#8230;"></textarea>
+    <div id="pc-modal-preview-box" class="pc-modal-preview-box" style="display:none;"></div>
+    <div class="pc-scope-note">
+      &#9989; Stage C.1 — Preview then Create in GM Control Tower (Profit Control triage inbox).<br>
+      &#10060; Will NOT do: BigQuery writes &#183; OpenClaw &#183; Ads &#183; Seller Central &#183; signal_inbox changes.
+    </div>
+    <div id="pc-task-modal-msg"></div>
+    <div class="pc-modal-actions">
+      <button class="btn-ghost" onclick="pcCloseModal(null,true)">Cancel</button>
+      <button class="btn-preview" id="pc-btn-preview"
+              onclick="pcSubmitPreview()">Preview Task</button>
+      <button class="btn-create" id="pc-btn-create"
+              onclick="pcSubmitCreate()">&#10003; Create Task</button>
+    </div>
+  </div>
+</div>
+<!-- ── End Profit Control v0.2 additions ── -->
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+// ============================================================
+//  CONFIG
+// ============================================================
+const BQ_PROXY = '/api';
+const AUTO_REFRESH_MS = 10 * 60 * 1000; // 10 min
+
+// Marketplace → store_id map (actual BigQuery values)
+const MP_STORE = {
+  UK: 'kbrands_uk',
+  US: 'kbrands_us',
+  CA: 'kbrands_canada',
+  DE: 'kbrands_de'
+};
+
+// Dynamic data dates — fetched from BigQuery on load / MP switch / refresh
+let LATEST_DATA_DATE = null;
+let DATA_DATE_7D = null;
+let DATA_DATE_14D = null;
+let DATA_DATE_30D = null;
+let PPC_LATEST_DATE = null;
+let PNL_LATEST_DATE = null;
+
+// ============================================================
+//  STATE
+// ============================================================
+let currentMP = localStorage.getItem('gm_mp') || 'UK';
+let refreshTimer = null;
+
+// ============================================================
+//  DYNAMIC DATE FETCHING
+// ============================================================
+function dateSub(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function fetchLatestDates(mp) {
+  const store = storeFilter(mp);
+  const today = todayStr();
+  let warnings = [];
+
+  // Fetch all three latest dates in parallel
+  const [salesRes, ppcRes, pnlRes] = await Promise.allSettled([
+    bqQuery(`SELECT MAX(report_date) AS latest FROM \`newdatonproject.DataMart_marts.fact_sales_asin_daily\` WHERE store_id = ${store}`),
+    bqQuery(`SELECT MAX(report_date) AS latest FROM \`newdatonproject.DataMart_marts.fact_ppc_campaign_daily\` WHERE store_id = ${store}`),
+    bqQuery(`SELECT MAX(week_start) AS latest FROM \`newdatonproject.DataMart_marts.fact_true_profitability\` WHERE store_id = ${store}`)
+  ]);
+
+  // Sales date
+  let salesDate = null;
+  if (salesRes.status === 'fulfilled' && salesRes.value?.rows?.[0]?.latest) {
+    salesDate = String(salesRes.value.rows[0].latest).slice(0, 10);
+  }
+  if (!salesDate) {
+    warnings.push('Sales date unavailable');
+    salesDate = dateSub(today, 2); // fallback: today - 2
+  } else if (salesDate > today) {
+    warnings.push('Sales date in future (' + salesDate + ') — using fallback');
+    salesDate = dateSub(today, 2);
+  }
+
+  // PPC date
+  let ppcDate = null;
+  if (ppcRes.status === 'fulfilled' && ppcRes.value?.rows?.[0]?.latest) {
+    ppcDate = String(ppcRes.value.rows[0].latest).slice(0, 10);
+  }
+  if (!ppcDate) {
+    warnings.push('PPC date unavailable');
+    ppcDate = dateSub(today, 2);
+  } else if (ppcDate > today) {
+    warnings.push('PPC date in future (' + ppcDate + ') — using fallback');
+    ppcDate = dateSub(today, 2);
+  }
+
+  // P&L date (weekly)
+  let pnlDate = null;
+  if (pnlRes.status === 'fulfilled' && pnlRes.value?.rows?.[0]?.latest) {
+    pnlDate = String(pnlRes.value.rows[0].latest).slice(0, 10);
+  }
+  if (!pnlDate) {
+    warnings.push('P&L date unavailable');
+    pnlDate = dateSub(today, 7);
+  } else if (pnlDate > today) {
+    warnings.push('P&L date in future (' + pnlDate + ') — using fallback');
+    pnlDate = dateSub(today, 7);
+  }
+
+  // Set global dates
+  LATEST_DATA_DATE = salesDate;
+  DATA_DATE_7D = dateSub(salesDate, 6);
+  DATA_DATE_14D = dateSub(salesDate, 13);
+  DATA_DATE_30D = dateSub(salesDate, 29);
+  PPC_LATEST_DATE = ppcDate;
+  PNL_LATEST_DATE = pnlDate;
+
+  // Update freshness labels
+  updateFreshnessLabel(salesDate, ppcDate, pnlDate, warnings);
+  return warnings;
+}
+
+function updateFreshnessLabel(salesDate, ppcDate, pnlDate, warnings) {
+  const el = $('data-as-of');
+  if (!el) return;
+
+  const today = todayStr();
+  const salesLag = Math.round((new Date(today) - new Date(salesDate)) / 86400000);
+  const ppcLag = Math.round((new Date(today) - new Date(ppcDate)) / 86400000);
+
+  const isStale = salesLag > 3 || ppcLag > 3;
+  const hasWarnings = warnings.length > 0;
+
+  let html = '';
+  html += '<span title="Sales: ' + salesDate + ' | PPC: ' + ppcDate + ' | P&L: ' + pnlDate + '">';
+  html += 'Sales: ' + salesDate;
+  html += ' · PPC: ' + ppcDate;
+  html += ' · P&L: ' + pnlDate;
+  html += '</span>';
+
+  if (hasWarnings) {
+    html += ' <span style="color:var(--red);" title="' + warnings.join('; ') + '">⚠</span>';
+  }
+
+  el.innerHTML = html;
+
+  // Style based on staleness
+  if (isStale || hasWarnings) {
+    el.style.background = 'rgba(239,68,68,0.1)';
+    el.style.borderColor = 'rgba(239,68,68,0.25)';
+    el.style.color = 'var(--red)';
+  } else {
+    el.style.background = 'rgba(34,197,94,0.1)';
+    el.style.borderColor = 'rgba(34,197,94,0.25)';
+    el.style.color = 'var(--green)';
+  }
+}
+
+// ============================================================
+//  UTILS
+// ============================================================
+const $ = id => document.getElementById(id);
+const fmt = {
+  currency: (v, sym='£') => {
+    if (v == null || isNaN(v)) return '—';
+    v = Number(v);
+    if (Math.abs(v) >= 1000000) return sym + (v/1000000).toFixed(2) + 'M';
+    if (Math.abs(v) >= 1000) return sym + (v/1000).toFixed(1) + 'k';
+    return sym + v.toFixed(2);
+  },
+  pct: v => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(1) + '%',
+  num: v => (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString(),
+  acos: v => {
+    if (v == null || isNaN(v)) return { text: '—', cls: '' };
+    v = Number(v);
+    if (v < 25) return { text: v.toFixed(1)+'%', cls: 'acos-green' };
+    if (v <= 50) return { text: v.toFixed(1)+'%', cls: 'acos-yellow' };
+    return { text: v.toFixed(1)+'%', cls: 'acos-red' };
+  },
+  doi: v => {
+    if (v == null || isNaN(v)) return { text: '—', style: 'background:#2a2d3e;color:#7c8db0;' };
+    v = Number(v);
+    if (v < 14)  return { text: Math.round(v)+'d', style: 'background:rgba(239,68,68,0.15);color:#ef4444;' };
+    if (v < 30)  return { text: Math.round(v)+'d', style: 'background:rgba(249,115,22,0.15);color:#f97316;' };
+    if (v < 60)  return { text: Math.round(v)+'d', style: 'background:rgba(245,158,11,0.15);color:#f59e0b;' };
+    return { text: Math.round(v)+'d', style: 'background:rgba(34,197,94,0.15);color:#22c55e;' };
+  },
+  relTime: ts => {
+    if (!ts) return '—';
+    const d = new Date(ts), now = new Date();
+    const diff = (now - d) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return Math.floor(diff/86400) + 'd ago';
+  },
+  mpSym: mp => ({ UK:'£', US:'$', CA:'CA$', DE:'€' }[mp] || '£')
+};
+
+function errPanel(msg, detail='') {
+  return `<div class="error-state">
+    <div class="error-icon">⚠️</div>
+    <div class="error-msg">${msg}</div>
+    ${detail ? `<div class="error-detail">${detail}</div>` : ''}
+  </div>`;
+}
+
+function tierBadge(tier) {
+  const t = (tier||'UNKNOWN').toUpperCase();
+  return `<span class="badge tier-${t}">${t}</span>`;
+}
+
+function stratBadge(strategy) {
+  if (!strategy) return '<span class="badge badge-gray">—</span>';
+  const s = strategy.toUpperCase();
+  return `<span class="badge strat-${s}">${s}</span>`;
+}
+
+function acosDelta(current, target) {
+  if (current == null || target == null || isNaN(current) || isNaN(target)) return '';
+  const diff = Number(current) - Number(target) * 100;
+  if (Math.abs(diff) < 0.1) return '<span class="delta-neg">on target</span>';
+  const sign = diff > 0 ? '+' : '';
+  const cls = diff > 0 ? 'delta-pos' : 'delta-neg';
+  return `<span class="${cls}">${sign}${diff.toFixed(1)}pp</span>`;
+}
+
+function sevBadge(sev) {
+  const s = (sev||'').toUpperCase();
+  const cls = { CRITICAL:'badge-red', HIGH:'badge-orange', MEDIUM:'badge-yellow', LOW:'badge-green', INFO:'badge-blue' }[s] || 'badge-gray';
+  return `<span class="badge ${cls}">${s}</span>`;
+}
+
+// ============================================================
+//  API HELPERS
+// ============================================================
+async function bqQuery(sql) {
+  const r = await fetch(`${BQ_PROXY}/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sql }),
+    signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(30000) : undefined
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+  return r.json();
+}
+
+async function bqGet(path) {
+  const r = await fetch(`${BQ_PROXY}${path}`, { signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(30000) : undefined });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+  return r.json();
+}
+
+// ============================================================
+//  STORE-ID MAPPING
+// ============================================================
+function storeId(mp) {
+  return MP_STORE[mp] || 'kbrands_uk';
+}
+
+function storeFilter(mp) {
+  return `'${storeId(mp)}'`;
+}
+
+// ============================================================
+//  PAGE: HOME — KPIs
+// ============================================================
+async function loadHomeKPIs(mp) {
+  const sym = fmt.mpSym(mp);
+  const store = storeFilter(mp);
+
+  // Revenue
+  try {
+    const { rows } = await bqQuery(`
+      SELECT SUM(CAST(revenue AS FLOAT64)) AS rev
+      FROM \`newdatonproject.DataMart_marts.fact_sales_asin_daily\`
+      WHERE store_id = ${store}
+        AND report_date BETWEEN '${DATA_DATE_7D}' AND '${LATEST_DATA_DATE}'
+    `);
+    const rev = rows?.[0]?.rev ?? null;
+    $('kpi-revenue').querySelector('.card-value').textContent = fmt.currency(rev, sym);
+    $('kpi-revenue').querySelector('.card-sub').textContent = 'ordered product sales';
+  } catch(e) {
+    $('kpi-revenue').querySelector('.card-value').textContent = '—';
+    $('kpi-revenue').querySelector('.card-sub').textContent = 'Data unavailable — check BigQuery access';
+  }
+
+  // PPC Spend + ACOS
+  try {
+    const { rows } = await bqQuery(`
+      SELECT
+        SUM(CAST(cost AS FLOAT64)) AS spend,
+        SUM(CAST(sales AS FLOAT64)) AS sales
+      FROM \`newdatonproject.DataMart_marts.fact_ppc_campaign_daily\`
+      WHERE store_id = ${store}
+        AND report_date BETWEEN '${DATA_DATE_7D}' AND '${LATEST_DATA_DATE}'
+    `);
+    const spend = rows?.[0]?.spend ?? null;
+    const sales = rows?.[0]?.sales ?? null;
+    $('kpi-spend').querySelector('.card-value').textContent = fmt.currency(spend, sym);
+    $('kpi-spend').querySelector('.card-sub').textContent = 'ad cost total';
+    const acos = (spend && sales && sales > 0) ? (spend / sales * 100) : null;
+    const acosInfo = fmt.acos(acos);
+    const acosEl = $('kpi-acos').querySelector('.card-value');
+    acosEl.textContent = acosInfo.text;
+    acosEl.className = 'card-value ' + acosInfo.cls;
+    $('kpi-acos').querySelector('.card-sub').textContent = 'spend / ad sales';
+  } catch(e) {
+    $('kpi-spend').querySelector('.card-value').textContent = '—';
+    $('kpi-spend').querySelector('.card-sub').textContent = 'Data unavailable — check BigQuery access';
+    $('kpi-acos').querySelector('.card-value').textContent = '—';
+    $('kpi-acos').querySelector('.card-sub').textContent = 'Data unavailable — check BigQuery access';
+  }
+
+  // Active Signals
+  try {
+    const { rows } = await bqQuery(`
+      SELECT COUNT(*) AS cnt
+      FROM \`k-brands-calendar.Omnisec_config.signal_inbox\`
+      WHERE status IN ('new', 'validated', 'validated_pending_owner', 'actioned')
+    `);
+    const cnt = rows?.[0]?.cnt ?? 0;
+    $('kpi-signals').querySelector('.card-value').textContent = cnt;
+    $('kpi-signals').querySelector('.card-sub').textContent = 'open in signal inbox';
+  } catch(e) {
+    $('kpi-signals').querySelector('.card-value').textContent = '0';
+    $('kpi-signals').querySelector('.card-sub').textContent = 'Signal inbox empty';
+  }
+}
+
+// ============================================================
+//  PAGE: HOME — Top Products
+// ============================================================
+async function loadTopProducts(mp) {
+  const sym = fmt.mpSym(mp);
+  const el = $('top-products-body');
+  try {
+    const { rows } = await bqQuery(`
+      SELECT
+        s.asin,
+        COALESCE(d.product_name, s.asin) AS product_name,
+        SUM(CAST(s.revenue AS FLOAT64)) AS revenue,
+        SUM(CAST(s.units_sold AS FLOAT64)) AS units,
+        SUM(CAST(s.sessions AS FLOAT64)) AS sessions,
+        SAFE_DIVIDE(SUM(CAST(s.units_sold AS FLOAT64)), SUM(CAST(s.sessions AS FLOAT64))) * 100 AS cvr,
+        t.tier,
+        t.strategy,
+        o.owner_name,
+        ta.target_acos,
+        ta.target_tacos
+      FROM \`newdatonproject.DataMart_marts.fact_sales_asin_daily\` s
+      LEFT JOIN \`newdatonproject.DataMart_marts.dim_asin_master\` d
+        ON s.asin = d.asin AND s.marketplace = d.marketplace
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.asin_tiers\` t
+        ON s.asin = t.asin AND t.store_id = ${storeFilter(mp)} AND t.active = TRUE
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.owner_mapping\` o
+        ON s.asin = o.asin AND o.store_id = ${storeFilter(mp)} AND o.active = TRUE
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.target_acos_config\` ta
+        ON ta.store_id = ${storeFilter(mp)} AND ta.asin = '*' AND ta.active = TRUE
+      WHERE s.store_id = ${storeFilter(mp)}
+        AND s.report_date BETWEEN '${DATA_DATE_7D}' AND '${LATEST_DATA_DATE}'
+      GROUP BY s.asin, product_name, t.tier, t.strategy, o.owner_name, ta.target_acos, ta.target_tacos
+      ORDER BY revenue DESC
+      LIMIT 15
+    `);
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="empty-state">No sales data found for this marketplace.</div>';
+      return;
+    }
+    $('top-products-meta').textContent = rows.length + ' products';
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>ASIN</th><th>Product</th>
+        <th class="text-right">Revenue</th>
+        <th class="text-right">Units</th>
+        <th class="text-right">CVR%</th>
+        <th>Tier</th><th>Strategy</th><th>Owner</th>
+        <th class="text-right">tACOS</th><th class="text-right">tTACOS</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map(r => `<tr>
+        <td class="mono">${r.asin||'—'}</td>
+        <td><span class="truncate" style="max-width:160px;display:block;" title="${r.product_name||''}">${r.product_name||'—'}</span></td>
+        <td class="text-right">${fmt.currency(r.revenue, sym)}</td>
+        <td class="text-right">${fmt.num(r.units)}</td>
+        <td class="text-right">${fmt.pct(r.cvr)}</td>
+        <td>${tierBadge(r.tier)}</td>
+        <td>${stratBadge(r.strategy)}</td>
+        <td class="td-muted">${r.owner_name||'—'}</td>
+        <td class="text-right td-muted">${r.target_acos ? fmt.pct(Number(r.target_acos)*100) : '—'}</td>
+        <td class="text-right td-muted">${r.target_tacos ? fmt.pct(Number(r.target_tacos)*100) : '—'}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(e) {
+    el.innerHTML = errPanel('Data unavailable — check BigQuery access', e.message);
+  }
+}
+
+// ============================================================
+//  PAGE: HOME — Inventory Alerts
+// ============================================================
+async function loadInvAlerts(mp) {
+  const el = $('inv-alerts-body');
+  try {
+    const { rows } = await bqQuery(`
+      SELECT
+        i.asin,
+        COALESCE(d.product_name, i.asin) AS product_name,
+        CAST(i.days_of_supply AS FLOAT64) AS doi,
+        CAST(i.fba_available AS INT64) AS fba,
+        CAST(i.daily_velocity_30d AS FLOAT64) AS velocity
+      FROM \`newdatonproject.DataMart_marts.fact_inventory_asin_daily\` i
+      LEFT JOIN \`newdatonproject.DataMart_marts.dim_asin_master\` d
+        ON i.asin = d.asin AND i.marketplace = d.marketplace
+      WHERE i.store_id = ${storeFilter(mp)}
+        AND i.report_date = '${LATEST_DATA_DATE}'
+        AND CAST(i.days_of_supply AS FLOAT64) < 30
+      ORDER BY doi ASC
+      LIMIT 20
+    `);
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="empty-state">✅ No inventory alerts. All ASINs have DOI ≥ 30 days.</div>';
+      return;
+    }
+    el.innerHTML = `<div class="inv-list">
+      ${rows.map(r => {
+        const d = fmt.doi(r.doi);
+        return `<div class="inv-item">
+          <span class="doi-badge" style="${d.style}">${d.text}</span>
+          <div class="inv-item-info">
+            <div class="inv-item-asin">${r.asin||'—'}</div>
+            <div class="inv-item-name" title="${r.product_name||''}">${r.product_name||'—'}</div>
+            <div class="inv-item-meta">FBA: ${fmt.num(r.fba)} units &bull; Velocity: ${r.velocity ? Number(r.velocity).toFixed(1) : '—'}/day</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } catch(e) {
+    el.innerHTML = errPanel('Data unavailable — check BigQuery access', e.message);
+  }
+}
+
+// ============================================================
+//  PAGE: PPC — Waste Finder
+// ============================================================
+async function loadPPCWaste(mp) {
+  const sym = fmt.mpSym(mp);
+  const el = $('waste-body');
+  try {
+    const { rows } = await bqQuery(`
+      SELECT
+        w.campaign_name,
+        SUM(CAST(w.cost AS FLOAT64)) AS spend,
+        SUM(CAST(w.clicks AS FLOAT64)) AS clicks,
+        SUM(CAST(w.sales AS FLOAT64)) AS sales,
+        AVG(CAST(w.acos AS FLOAT64)) AS avg_acos,
+        ta.target_acos
+      FROM \`newdatonproject.DataMart_marts.fact_ppc_campaign_daily\` w
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.target_acos_config\` ta
+        ON ta.store_id = ${storeFilter(mp)} AND ta.asin = '*' AND ta.active = TRUE
+      WHERE w.store_id = ${storeFilter(mp)}
+        AND w.report_date BETWEEN '${dateSub(PPC_LATEST_DATE, 13)}' AND '${PPC_LATEST_DATE}'
+        AND CAST(w.cost AS FLOAT64) > 0
+      GROUP BY w.campaign_name, ta.target_acos
+      HAVING SUM(CAST(w.cost AS FLOAT64)) > 0
+         AND (AVG(CAST(w.acos AS FLOAT64)) > 50 OR AVG(CAST(w.acos AS FLOAT64)) IS NULL OR SUM(CAST(w.sales AS FLOAT64)) = 0)
+      ORDER BY spend DESC
+      LIMIT 30
+    `);
+    $('waste-meta').textContent = rows ? rows.length + ' campaigns' : '0 campaigns';
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="empty-state">✅ No waste campaigns found! All active campaigns have ACOS ≤ 50%.</div>';
+      return;
+    }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Campaign</th>
+        <th class="text-right">Spend (14d)</th>
+        <th class="text-right">Clicks</th>
+        <th class="text-right">Ad Sales</th>
+        <th class="text-right">ACOS</th>
+        <th class="text-right">tACOS</th>
+        <th class="text-right">Delta</th>
+        <th>Action</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map(r => {
+        const acosVal = r.avg_acos != null ? Number(r.avg_acos) : null;
+        const tAcos = r.target_acos ? Number(r.target_acos) * 100 : null;
+        const acosDisplay = (acosVal == null || r.sales == null || Number(r.sales) === 0)
+          ? '<span class="acos-red">No Sales</span>'
+          : `<span class="${acosVal > 50 ? 'acos-red' : 'acos-yellow'}">${acosVal.toFixed(1)}%</span>`;
+        let deltaHtml = '—';
+        if (acosVal != null && tAcos != null) {
+          const diff = acosVal - tAcos;
+          const sign = diff > 0 ? '+' : '';
+          const cls = diff > 0 ? 'delta-pos' : 'delta-neg';
+          deltaHtml = `<span class="${cls}">${sign}${diff.toFixed(1)}pp</span>`;
+        }
+        return `<tr>
+          <td><span class="truncate" style="max-width:200px;display:block;" title="${r.campaign_name||''}">${r.campaign_name||'—'}</span></td>
+          <td class="text-right">${fmt.currency(r.spend, sym)}</td>
+          <td class="text-right">${fmt.num(r.clicks)}</td>
+          <td class="text-right">${fmt.currency(r.sales, sym)}</td>
+          <td class="text-right">${acosDisplay}</td>
+          <td class="text-right td-muted">${tAcos ? tAcos.toFixed(0)+'%' : '—'}</td>
+          <td class="text-right">${deltaHtml}</td>
+          <td><span class="badge badge-action">Pause / Neg KW</span></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></div>`;
+  } catch(e) {
+    el.innerHTML = errPanel('Data unavailable — check BigQuery access', e.message);
+  }
+}
+
+// ============================================================
+//  PAGE: PPC — Campaign Performance
+// ============================================================
+async function loadCampaignPerf(mp) {
+  const sym = fmt.mpSym(mp);
+  const el = $('camp-body');
+  try {
+    const { rows } = await bqQuery(`
+      SELECT
+        c.campaign_name,
+        SUM(CAST(c.cost AS FLOAT64)) AS spend,
+        SUM(CAST(c.sales AS FLOAT64)) AS sales,
+        SUM(CAST(c.clicks AS FLOAT64)) AS clicks,
+        SUM(CAST(c.impressions AS FLOAT64)) AS impressions,
+        AVG(CAST(c.acos AS FLOAT64)) AS avg_acos,
+        ta.target_acos,
+        ta.target_tacos
+      FROM \`newdatonproject.DataMart_marts.fact_ppc_campaign_daily\` c
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.target_acos_config\` ta
+        ON ta.store_id = ${storeFilter(mp)} AND ta.asin = '*' AND ta.active = TRUE
+      WHERE c.store_id = ${storeFilter(mp)}
+        AND c.report_date BETWEEN '${dateSub(PPC_LATEST_DATE, 6)}' AND '${PPC_LATEST_DATE}'
+      GROUP BY c.campaign_name, ta.target_acos, ta.target_tacos
+      ORDER BY spend DESC
+      LIMIT 20
+    `);
+    $('camp-meta').textContent = rows ? rows.length + ' campaigns' : '0';
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="empty-state">No campaign data found for this marketplace.</div>';
+      return;
+    }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Campaign</th>
+        <th class="text-right">Spend (7d)</th>
+        <th class="text-right">Ad Sales</th>
+        <th class="text-right">ACOS%</th>
+        <th class="text-right">tACOS</th>
+        <th class="text-right">Delta</th>
+        <th class="text-right">Clicks</th>
+        <th class="text-right">Impressions</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map(r => {
+        const acosRaw = r.avg_acos != null ? Number(r.avg_acos)
+          : (r.sales && Number(r.sales) > 0 ? Number(r.spend) / Number(r.sales) * 100 : null);
+        const acos = fmt.acos(acosRaw);
+        const tAcos = r.target_acos ? Number(r.target_acos) * 100 : null;
+        let deltaHtml = '—';
+        if (acosRaw != null && tAcos != null) {
+          const diff = acosRaw - tAcos;
+          const sign = diff > 0 ? '+' : '';
+          const cls = diff > 0 ? 'delta-pos' : 'delta-neg';
+          deltaHtml = Math.abs(diff) < 0.1 ? '<span class="delta-neg">on target</span>' : `<span class="${cls}">${sign}${diff.toFixed(1)}pp</span>`;
+        }
+        return `<tr>
+          <td><span class="truncate" style="max-width:220px;display:block;" title="${r.campaign_name||''}">${r.campaign_name||'—'}</span></td>
+          <td class="text-right">${fmt.currency(r.spend, sym)}</td>
+          <td class="text-right">${fmt.currency(r.sales, sym)}</td>
+          <td class="text-right ${acos.cls}">${acos.text}</td>
+          <td class="text-right td-muted">${tAcos ? tAcos.toFixed(0)+'%' : '—'}</td>
+          <td class="text-right">${deltaHtml}</td>
+          <td class="text-right">${fmt.num(r.clicks)}</td>
+          <td class="text-right td-muted">${fmt.num(r.impressions)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></div>`;
+  } catch(e) {
+    el.innerHTML = errPanel('Data unavailable — check BigQuery access', e.message);
+  }
+}
+
+// ============================================================
+//  PAGE: INVENTORY RISK
+// ============================================================
+async function loadInventoryRisk(mp) {
+  const el = $('inv-risk-body');
+  const bannerEl = $('inv-warning-banner');
+  if (bannerEl) bannerEl.innerHTML = '';
+  try {
+    const store = storeFilter(mp);
+    const { rows } = await bqQuery(`
+      WITH latest_snapshot AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY asin ORDER BY report_date DESC) as rn
+        FROM \`newdatonproject.DataMart_marts.fact_inventory_asin_daily\`
+        WHERE store_id = ${store} AND report_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+      ),
+      latest AS (SELECT * FROM latest_snapshot WHERE rn = 1),
+      valid_snapshot AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY asin ORDER BY report_date DESC) as rn
+        FROM \`newdatonproject.DataMart_marts.fact_inventory_asin_daily\`
+        WHERE store_id = ${store} AND report_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+          AND (SAFE_CAST(sku_count AS INT64) > 0 OR primary_sku IS NOT NULL)
+          AND (SAFE_CAST(fba_total AS FLOAT64) > 0 OR SAFE_CAST(fba_available AS FLOAT64) > 0)
+      ),
+      valid AS (SELECT * FROM valid_snapshot WHERE rn = 1),
+      inv_merged AS (
+        SELECT
+          COALESCE(v.asin, l.asin) as asin,
+          COALESCE(v.store_id, l.store_id) as store_id,
+          COALESCE(v.marketplace, l.marketplace) as marketplace,
+          COALESCE(v.brand, l.brand) as brand,
+          l.report_date as latest_snapshot_date,
+          COALESCE(v.report_date, l.report_date) as used_snapshot_date,
+          CASE
+            WHEN l.report_date = v.report_date THEN 'LIVE'
+            WHEN v.report_date IS NOT NULL THEN 'FALLBACK'
+            ELSE 'UNRELIABLE'
+          END as data_status,
+          COALESCE(v.fba_available, l.fba_available) as fba_available,
+          COALESCE(v.fba_inbound, l.fba_inbound) as fba_inbound,
+          COALESCE(v.fba_total, l.fba_total) as fba_total,
+          COALESCE(v.total_inventory, l.total_inventory) as total_inventory,
+          COALESCE(v.fba_reserved, l.fba_reserved) as fba_reserved,
+          COALESCE(l.days_of_supply, v.days_of_supply) as days_of_supply,
+          COALESCE(l.daily_velocity_30d, v.daily_velocity_30d) as daily_velocity_30d,
+          COALESCE(l.is_out_of_stock, v.is_out_of_stock) as is_out_of_stock,
+          COALESCE(l.is_critical_stock, v.is_critical_stock) as is_critical_stock,
+          COALESCE(l.inventory_status_tier, v.inventory_status_tier) as inventory_status_tier
+        FROM latest l
+        FULL OUTER JOIN valid v ON l.asin = v.asin
+      )
+      SELECT
+        m.asin,
+        COALESCE(d.product_name, m.asin) AS product_name,
+        SAFE_CAST(m.days_of_supply AS FLOAT64) AS doi,
+        SAFE_CAST(m.fba_available AS INT64) AS fba,
+        SAFE_CAST(m.fba_inbound AS INT64) AS fba_inbound,
+        SAFE_CAST(m.fba_total AS INT64) AS fba_total,
+        SAFE_CAST(m.total_inventory AS INT64) AS total_inv,
+        SAFE_CAST(m.daily_velocity_30d AS FLOAT64) AS velocity,
+        COALESCE(m.inventory_status_tier, 'UNKNOWN') AS risk_level,
+        CAST(m.is_critical_stock AS STRING) AS is_critical,
+        m.data_status,
+        CAST(m.latest_snapshot_date AS STRING) AS latest_snapshot_date,
+        CAST(m.used_snapshot_date AS STRING) AS used_snapshot_date,
+        t.tier AS config_tier,
+        t.strategy,
+        o.owner_name
+      FROM inv_merged m
+      LEFT JOIN \`newdatonproject.DataMart_marts.dim_asin_master\` d
+        ON m.asin = d.asin AND m.marketplace = d.marketplace
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.asin_tiers\` t
+        ON m.asin = t.asin AND t.store_id = ${store} AND t.active = TRUE
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.owner_mapping\` o
+        ON m.asin = o.asin AND o.store_id = ${store} AND o.active = TRUE
+      ORDER BY doi ASC NULLS LAST
+      LIMIT 100
+    `);
+
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="card"><div class="empty-state">No inventory data found for this marketplace.</div></div>';
+      return;
+    }
+
+    // Check for fallback/unreliable data and show warning banner
+    const hasFallback = rows.some(r => r.data_status === 'FALLBACK');
+    const hasUnreliable = rows.some(r => r.data_status === 'UNRELIABLE');
+    const fallbackRows = rows.filter(r => r.data_status === 'FALLBACK');
+    const fallbackDate = fallbackRows.length > 0 ? fallbackRows[0].used_snapshot_date : '';
+
+    // Only show UNRELIABLE global warning if managed ASINs (with config_tier) are affected
+    const unreliableRows = rows.filter(r => r.data_status === 'UNRELIABLE');
+    const activeUnreliable = unreliableRows.filter(r =>
+      r.config_tier && r.config_tier !== 'UNKNOWN'
+    );
+    const hasActiveUnreliable = activeUnreliable.length > 0;
+
+    if (bannerEl && (hasFallback || hasActiveUnreliable)) {
+      let msg = '';
+      if (hasActiveUnreliable) {
+        msg = '<strong>Inventory data warning:</strong> Some managed ASINs have no valid FBA data in the last 14 days (marked UNRELIABLE). <span style="color: var(--text-muted);">Verify critical decisions in Seller Central.</span>';
+      } else {
+        msg = '<strong>Inventory data warning:</strong> Latest FBA Manage Inventory feed appears incomplete. Using last valid snapshot from <strong>' + fallbackDate + '</strong>. <span style="color: var(--text-muted);">Verify critical decisions in Seller Central.</span>';
+      }
+      bannerEl.innerHTML = '<div style="background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">' +
+        '<span style="font-size: 18px;">\u26a0\ufe0f</span>' +
+        '<span style="color: var(--yellow); font-size: 13px;">' + msg + '</span></div>';
+    }
+
+    // Classify severity
+    const classify = row => {
+      const doi = Number(row.doi);
+      if (row.is_critical === 'true' || doi < 14) return 'CRITICAL';
+      if (doi < 21) return 'HIGH';
+      if (doi < 30) return 'MEDIUM';
+      return 'OK';
+    };
+
+    const groups = { CRITICAL: [], HIGH: [], MEDIUM: [], OK: [] };
+    rows.forEach(r => {
+      const sev = classify(r);
+      groups[sev].push({ ...r, sev });
+    });
+
+    const statusBadge = (status) => {
+      return '<span class="inv-data-status inv-status-' + status + '">' + status + '</span>';
+    };
+
+    const renderGroup = (label, items, cls) => {
+      if (!items.length) return '';
+      return '<div class="risk-section">' +
+        '<span class="risk-section-title risk-' + label.toLowerCase() + '">' + label + ' \u2014 ' + items.length + ' ASINs</span>' +
+        '<div class="risk-grid">' +
+          items.map(r => {
+            const d = fmt.doi(r.doi);
+            const snapshotMismatch = r.latest_snapshot_date !== r.used_snapshot_date;
+            let actionNote = '';
+            if (r.data_status === 'UNRELIABLE') {
+              const isManaged = r.config_tier && r.config_tier !== 'UNKNOWN';
+              if (isManaged) {
+                actionNote = '<div class="risk-card-row" style="margin-top:4px;"><span style="color:var(--red);font-size:10px;">Data unreliable \u2014 verify in Seller Central</span></div>';
+              } else {
+                actionNote = '<div class="risk-card-row" style="margin-top:4px;"><span style="color:var(--text-muted);font-size:10px;">No recent activity \u2014 likely discontinued</span></div>';
+              }
+            } else if (r.data_status === 'FALLBACK') {
+              actionNote = '<div class="risk-card-row" style="margin-top:4px;"><span style="color:var(--yellow);font-size:10px;">Fallback data \u2014 verify in Seller Central</span></div>';
+            }
+            return '<div class="risk-card sev-' + r.sev + '">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+                '<span class="risk-card-asin">' + (r.asin||'\u2014') + '</span>' +
+                statusBadge(r.data_status || 'LIVE') +
+              '</div>' +
+              '<div class="risk-card-name" title="' + (r.product_name||'') + '">' + (r.product_name||'\u2014') + '</div>' +
+              '<div class="risk-card-row">' +
+                '<span class="risk-card-label">Snapshot</span>' +
+                '<span class="risk-card-val">' + (r.latest_snapshot_date||'\u2014') +
+                  (snapshotMismatch ? ' <span class="inv-snapshot-mismatch">(using ' + (r.used_snapshot_date||'?') + ')</span>' : '') +
+                '</span>' +
+              '</div>' +
+              '<div class="risk-card-row">' +
+                '<span class="risk-card-label">DOI</span>' +
+                '<span class="doi-badge" style="' + d.style + ';padding:2px 6px;border-radius:4px;font-size:11px;">' + d.text + '</span>' +
+              '</div>' +
+              '<div class="risk-card-row">' +
+                '<span class="risk-card-label">FBA Available</span>' +
+                '<span class="risk-card-val">' + fmt.num(r.fba) + '</span>' +
+              '</div>' +
+              '<div class="risk-card-row">' +
+                '<span class="risk-card-label">FBA Inbound</span>' +
+                '<span class="risk-card-val">' + fmt.num(r.fba_inbound) + '</span>' +
+              '</div>' +
+              '<div class="risk-card-row">' +
+                '<span class="risk-card-label">Total Inventory</span>' +
+                '<span class="risk-card-val">' + fmt.num(r.total_inv) + '</span>' +
+              '</div>' +
+              '<div class="risk-card-row">' +
+                '<span class="risk-card-label">Velocity/day</span>' +
+                '<span class="risk-card-val">' + (r.velocity ? Number(r.velocity).toFixed(1) : '\u2014') + '</span>' +
+              '</div>' +
+              '<div class="risk-card-row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">' +
+                '<span>' + tierBadge(r.config_tier) + '</span>' +
+                '<span>' + stratBadge(r.strategy) + '</span>' +
+              '</div>' +
+              '<div class="risk-card-row">' +
+                '<span class="risk-card-label">Owner</span>' +
+                '<span class="risk-card-val">' + (r.owner_name||'\u2014') + '</span>' +
+              '</div>' +
+              actionNote +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    };
+
+    el.innerHTML =
+      renderGroup('CRITICAL', groups.CRITICAL) +
+      renderGroup('HIGH', groups.HIGH) +
+      renderGroup('MEDIUM', groups.MEDIUM) +
+      renderGroup('OK', groups.OK);
+
+  } catch(e) {
+    el.innerHTML = '<div class="card">' + errPanel('Data unavailable \u2014 check BigQuery access', e.message) + '</div>';
+  }
+}
+
+// ============================================================
+//  ETL FEED HEALTH
+// ============================================================
+function toggleETL() {
+  const toggle = $('etl-toggle');
+  const body = $('etl-body');
+  toggle.classList.toggle('open');
+  body.classList.toggle('open');
+  if (body.classList.contains('open') && body.dataset.loaded !== 'true') {
+    loadETLHealth(currentMP);
+    body.dataset.loaded = 'true';
+  }
+}
+
+async function loadETLHealth(mp) {
+  const el = $('etl-health-body');
+  try {
+    const store = storeFilter(mp);
+    const { rows } = await bqQuery(`
+      WITH snapshots AS (
+        SELECT
+          report_date,
+          COUNT(DISTINCT asin) as asin_count,
+          SUM(CASE WHEN SAFE_CAST(sku_count AS INT64) > 0 THEN 1 ELSE 0 END) as valid_sku_rows,
+          SUM(CASE WHEN SAFE_CAST(fba_available AS FLOAT64) > 0 THEN 1 ELSE 0 END) as has_fba_available,
+          SUM(CASE WHEN primary_sku IS NOT NULL AND primary_sku != '' THEN 1 ELSE 0 END) as has_primary_sku,
+          SUM(CASE WHEN SAFE_CAST(fba_total AS FLOAT64) > 0 THEN 1 ELSE 0 END) as has_fba_total,
+          SUM(CASE WHEN days_of_supply IS NOT NULL THEN 1 ELSE 0 END) as has_dos
+        FROM \`newdatonproject.DataMart_marts.fact_inventory_asin_daily\`
+        WHERE store_id = ${store} AND report_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+        GROUP BY report_date
+        ORDER BY report_date DESC
+      )
+      SELECT
+        CAST(report_date AS STRING) as report_date,
+        asin_count,
+        valid_sku_rows,
+        has_fba_available,
+        has_primary_sku,
+        has_fba_total,
+        has_dos,
+        CASE
+          WHEN valid_sku_rows = 0 AND has_fba_available = 0 THEN 'FAILED'
+          WHEN valid_sku_rows < asin_count * 0.5 THEN 'PARTIAL'
+          ELSE 'OK'
+        END as feed_status
+      FROM snapshots
+    `);
+
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="empty-state" style="padding:16px;">No ETL data found for the last 7 days.</div>';
+      return;
+    }
+
+    el.innerHTML = '<table class="etl-health-table">' +
+      '<thead><tr><th>Date</th><th>ASINs</th><th>Valid SKU</th><th>FBA Avail</th><th>FBA Total</th><th>Has DOS</th><th>Status</th></tr></thead>' +
+      '<tbody>' +
+      rows.map(r => {
+        return '<tr>' +
+          '<td>' + (r.report_date||'\u2014') + '</td>' +
+          '<td>' + fmt.num(r.asin_count) + '</td>' +
+          '<td>' + fmt.num(r.valid_sku_rows) + '</td>' +
+          '<td>' + fmt.num(r.has_fba_available) + '</td>' +
+          '<td>' + fmt.num(r.has_fba_total) + '</td>' +
+          '<td>' + fmt.num(r.has_dos) + '</td>' +
+          '<td><span class="feed-' + r.feed_status + '">' + r.feed_status + '</span></td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table>';
+  } catch(e) {
+    el.innerHTML = errPanel('ETL health check failed', e.message);
+  }
+}
+
+
+// ============================================================
+//  PAGE: P&L
+// ============================================================
+async function loadPL(mp) {
+  const sym = fmt.mpSym(mp);
+  const el = $('pl-body');
+
+  // Try gm_mart_pl_daily first, fall back to computed
+  let usedMart = false;
+  let rows = null;
+
+  try {
+    const res = await bqQuery(`
+      SELECT
+        p.asin,
+        p.product_name,
+        SUM(CAST(p.gross_revenue AS FLOAT64)) AS revenue,
+        SUM(CAST(p.total_ad_spend AS FLOAT64)) AS ad_spend,
+        AVG(CAST(p.estimated_margin_pct AS FLOAT64)) AS margin_pct,
+        SUM(CAST(p.estimated_net_profit AS FLOAT64)) AS net_profit,
+        AVG(CAST(p.tacos AS FLOAT64)) AS tacos,
+        p.profitability_tier AS prof_tier,
+        t.tier AS config_tier,
+        t.strategy,
+        o.owner_name,
+        ta.target_acos,
+        ta.target_tacos
+      FROM \`newdatonproject.DataMart_marts.fact_true_profitability\` p
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.asin_tiers\` t
+        ON p.asin = t.asin AND t.store_id = ${storeFilter(mp)} AND t.active = TRUE
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.owner_mapping\` o
+        ON p.asin = o.asin AND o.store_id = ${storeFilter(mp)} AND o.active = TRUE
+      LEFT JOIN \`k-brands-calendar.Omnisec_config.target_acos_config\` ta
+        ON ta.store_id = ${storeFilter(mp)} AND ta.asin = '*' AND ta.active = TRUE
+      WHERE p.store_id = ${storeFilter(mp)}
+        AND p.week_start = '${PNL_LATEST_DATE}'
+      GROUP BY p.asin, p.product_name, p.profitability_tier, t.tier, t.strategy, o.owner_name, ta.target_acos, ta.target_tacos
+      ORDER BY revenue DESC
+      LIMIT 30
+    `);
+    rows = res.rows;
+    usedMart = true;
+  } catch(e) { /* fall through */ }
+
+  if (!rows || rows.length === 0) {
+    // Fallback: compute from sales only (no asin in ppc table)
+    try {
+      const res = await bqQuery(`
+        SELECT
+          s.asin,
+          COALESCE(d.product_name, s.asin) AS product_name,
+          SUM(CAST(s.revenue AS FLOAT64)) AS revenue,
+          SUM(CAST(s.units_sold AS FLOAT64)) AS units,
+          0 AS ad_spend,
+          0 AS ad_sales
+        FROM \`newdatonproject.DataMart_marts.fact_sales_asin_daily\` s
+        LEFT JOIN \`newdatonproject.DataMart_marts.dim_asin_master\` d
+          ON s.asin = d.asin AND s.marketplace = d.marketplace
+        WHERE s.store_id = ${storeFilter(mp)}
+          AND s.report_date BETWEEN '${DATA_DATE_7D}' AND '${LATEST_DATA_DATE}'
+        GROUP BY s.asin, product_name
+        ORDER BY revenue DESC
+        LIMIT 30
+      `);
+      rows = res.rows;
+      usedMart = false;
+    } catch(e2) {
+      el.innerHTML = errPanel('Data unavailable — check BigQuery access', e2.message);
+      return;
+    }
+  }
+
+  if (!rows || rows.length === 0) {
+    el.innerHTML = '<div class="empty-state">No P&L data found for this marketplace.</div>';
+    return;
+  }
+
+  $('pl-meta').textContent = (usedMart ? 'From fact_true_profitability' : 'Estimated — COGS not available') + ' · ' + rows.length + ' ASINs';
+
+  if (!usedMart) {
+    el.innerHTML = `
+      <div class="placeholder-banner">
+        ⚠️ Estimated mode: COGS not available. PPC spend not broken out by ASIN in source data. Showing gross margin estimate (Revenue × 70% after fees). Upgrade to fact_true_profitability for full P&amp;L.
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>ASIN</th><th>Product</th>
+          <th class="text-right">Revenue</th>
+          <th class="text-right">Est. Fees (30%)</th>
+          <th class="text-right">PPC Spend</th>
+          <th class="text-right">Gross Contrib.</th>
+          <th class="text-right">Margin%</th>
+          <th>Tier</th>
+        </tr></thead>
+        <tbody>
+        ${rows.map(r => {
+          const rev = Number(r.revenue || 0);
+          const fees = rev * 0.30;
+          const spend = Number(r.ad_spend || 0);
+          const contrib = rev - fees - spend;
+          const margin = rev > 0 ? (contrib / rev * 100) : null;
+          const mInfo = fmt.acos(margin); // reuse color logic
+          let tier = margin >= 20 ? 'CORE' : margin >= 10 ? 'WATCH' : margin !== null ? 'POOR' : 'UNKNOWN';
+          return `<tr>
+            <td class="mono">${r.asin||'—'}</td>
+            <td><span class="truncate" style="max-width:180px;display:block;" title="${r.product_name||''}">${r.product_name||'—'}</span></td>
+            <td class="text-right">${fmt.currency(rev, sym)}</td>
+            <td class="text-right td-muted">${fmt.currency(fees, sym)}</td>
+            <td class="text-right">${fmt.currency(spend, sym)}</td>
+            <td class="text-right">${fmt.currency(contrib, sym)}</td>
+            <td class="text-right ${mInfo.cls}">${fmt.pct(margin)}</td>
+            <td>${tierBadge(tier)}</td>
+          </tr>`;
+        }).join('')}
+        </tbody></table></div>`;
+    return;
+  }
+
+  // Mart data — margin_pct is decimal (0.589 = 58.9%), tacos is decimal too
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>ASIN</th><th>Product</th>
+      <th class="text-right">Revenue</th>
+      <th class="text-right">PPC Spend</th>
+      <th class="text-right">Net Profit</th>
+      <th class="text-right">Margin%</th>
+      <th class="text-right">TACOS%</th>
+      <th>Tier</th><th>Strategy</th><th>Owner</th>
+      <th class="text-right">tACOS</th><th class="text-right">tTACOS</th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(r => {
+      const marginRaw = Number(r.margin_pct || 0);
+      const margin = marginRaw < 1 ? marginRaw * 100 : marginRaw;
+      const mCls = margin >= 25 ? 'acos-green' : margin >= 10 ? 'acos-yellow' : 'acos-red';
+      const tacosRaw = Number(r.tacos || 0);
+      const tacosVal = tacosRaw < 1 ? tacosRaw * 100 : tacosRaw;
+      const displayTier = r.config_tier || r.prof_tier || null;
+      return `<tr>
+        <td class="mono">${r.asin||'—'}</td>
+        <td><span class="truncate" style="max-width:180px;display:block;" title="${r.product_name||''}">${r.product_name||'—'}</span></td>
+        <td class="text-right">${fmt.currency(r.revenue, sym)}</td>
+        <td class="text-right">${fmt.currency(r.ad_spend, sym)}</td>
+        <td class="text-right">${fmt.currency(r.net_profit, sym)}</td>
+        <td class="text-right ${mCls}">${margin.toFixed(1)}%</td>
+        <td class="text-right td-muted">${tacosVal.toFixed(1)}%</td>
+        <td>${tierBadge(displayTier)}</td>
+        <td>${stratBadge(r.strategy)}</td>
+        <td class="td-muted">${r.owner_name||'—'}</td>
+        <td class="text-right td-muted">${r.target_acos ? fmt.pct(Number(r.target_acos)*100) : '—'}</td>
+        <td class="text-right td-muted">${r.target_tacos ? fmt.pct(Number(r.target_tacos)*100) : '—'}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`;
+}
+
+// ============================================================
+//  PAGE: SIGNALS
+// ============================================================
+async function loadSignals(mp) {
+  const el = $('signals-body');
+  let rows = null;
+
+  try {
+    const res = await bqQuery(`
+      SELECT
+        signal_id, created_at, signal_type, severity, marketplace_code,
+        asin, headline, status, owner_name, source, clickup_task_id
+      FROM \`k-brands-calendar.Omnisec_config.signal_inbox\`
+      WHERE status IN ('new', 'validated', 'validated_pending_owner', 'actioned')
+        AND (marketplace_code = '${mp}' OR marketplace_code IS NULL)
+      ORDER BY
+        CASE UPPER(severity) WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,
+        created_at DESC
+      LIMIT 50
+    `);
+    rows = res.rows;
+  } catch(e) {
+    // Table may not exist or query blocked — show placeholder
+    rows = null;
+  }
+
+  $('signals-meta').textContent = rows ? rows.length + ' open signals' : 'Table not yet active';
+
+  if (!rows) {
+    el.innerHTML = `
+      <div class="placeholder-banner">
+        ℹ️ Signal Inbox table (gm_signal_inbox) not yet active. Showing example signals.
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>Severity</th><th>Type</th><th>Marketplace</th>
+          <th>ASIN</th><th>Headline</th><th>Owner</th><th>Created</th>
+        </tr></thead>
+        <tbody class="placeholder-row">
+          <tr class="signal-row-critical">
+            <td>${sevBadge('CRITICAL')}</td>
+            <td>STOCK_OUT_RISK</td><td>UK</td>
+            <td class="mono">B08XYZ1234</td>
+            <td>Laevo Posture Corrector — 8 days of supply remaining</td>
+            <td><span class="badge badge-blue">GM</span></td>
+            <td class="td-muted">2h ago</td>
+          </tr>
+          <tr class="signal-row-high">
+            <td>${sevBadge('HIGH')}</td>
+            <td>ACOS_SPIKE</td><td>US</td>
+            <td class="mono">B09ABC5678</td>
+            <td>Gymbee Resistance Bands — ACOS jumped to 67% (7d avg)</td>
+            <td><span class="badge badge-blue">PPC MGR</span></td>
+            <td class="td-muted">5h ago</td>
+          </tr>
+          <tr class="signal-row-medium">
+            <td>${sevBadge('MEDIUM')}</td>
+            <td>REVIEW_DROP</td><td>CA</td>
+            <td class="mono">B07DEF9012</td>
+            <td>cinch! Ankle Support — Rating fell from 4.5 → 4.1</td>
+            <td><span class="badge badge-gray">BRAND MGR</span></td>
+            <td class="td-muted">1d ago</td>
+          </tr>
+        </tbody>
+      </table></div>`;
+    return;
+  }
+
+  if (rows.length === 0) {
+    el.innerHTML = '<div class="empty-state">✅ No open signals. Signal Inbox is clear.</div>';
+    return;
+  }
+
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Severity</th><th>Type</th><th>Marketplace</th>
+      <th>ASIN</th><th>Headline</th><th>Owner</th><th>Created</th>
+      <th>ClickUp Status</th><th>Task</th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(r => {
+      const sevCls = `signal-row-${(r.severity||'').toLowerCase()}`;
+      const tid = r.clickup_task_id || '';
+      const taskLink = tid ? `<a href="https://app.clickup.com/t/${tid}" target="_blank" rel="noopener" style="color:var(--blue);font-size:11px;">${tid}</a>` : '—';
+      return `<tr class="${sevCls}">
+        <td>${sevBadge(r.severity)}</td>
+        <td><span class="badge badge-gray">${r.signal_type||'—'}</span></td>
+        <td>${r.marketplace_code||'—'}</td>
+        <td class="mono">${r.asin||'—'}</td>
+        <td>${r.headline||'—'}</td>
+        <td><span class="badge badge-blue">${r.owner_name||'—'}</span></td>
+        <td class="td-muted">${fmt.relTime(r.created_at)}</td>
+        <td id="cu-status-${tid}" class="td-muted" style="font-size:11px;">${tid ? '<span style="opacity:0.4;">↻</span>' : '—'}</td>
+        <td>${taskLink}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`;
+
+  // Progressive enrichment: fetch ClickUp statuses async
+  enrichClickUpStatuses();
+}
+
+async function enrichClickUpStatuses() {
+  try {
+    const resp = await fetch('/api/clickup-signals');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (data.error) {
+      // Mark all spinners as unavailable
+      document.querySelectorAll('[id^="cu-status-"]').forEach(el => {
+        if (el.textContent === '↻') el.innerHTML = '<span class="td-muted" style="font-size:10px;">ClickUp unavailable</span>';
+      });
+      return;
+    }
+    (data.tasks || []).forEach(t => {
+      const cell = document.getElementById('cu-status-' + t.task_id);
+      if (!cell) return;
+      const color = t.status_color || 'var(--text-muted)';
+      const statusText = (t.status || 'unknown').toUpperCase();
+      const assigneeText = (t.assignees || []).join(', ') || '';
+      const updatedText = t.date_updated ? fmt.relTime(t.date_updated) : '';
+      const priorityBadge = t.priority && t.priority !== 'none'
+        ? `<span class="badge badge-gray" style="font-size:9px;margin-left:4px;">${t.priority}</span>` : '';
+      cell.innerHTML =
+        `<span style="color:${color};font-weight:600;font-size:11px;">${statusText}</span>${priorityBadge}` +
+        (assigneeText ? `<br><span class="td-muted" style="font-size:10px;">${assigneeText}</span>` : '') +
+        (updatedText ? `<br><span class="td-muted" style="font-size:9px;">updated ${updatedText}</span>` : '');
+    });
+  } catch(e) {
+    document.querySelectorAll('[id^="cu-status-"]').forEach(el => {
+      if (el.textContent === '↻') el.innerHTML = '<span class="td-muted" style="font-size:10px;">—</span>';
+    });
+  }
+}
+
+// ============================================================
+//  HOME: GM ACTION CENTER
+// ============================================================
+async function loadActionCenter(mp) {
+  const el = $('action-center-body');
+  const meta = $('action-center-meta');
+  let signalRows = null;
+  try {
+    const { rows } = await bqQuery(`
+      SELECT signal_id, signal_type, severity, status, owner_name,
+             clickup_task_id, created_at, actioned_at, marketplace_code, asin, headline
+      FROM \`k-brands-calendar.Omnisec_config.signal_inbox\`
+      WHERE status IN ('new', 'validated', 'validated_pending_owner', 'actioned')
+        AND (marketplace_code = '${mp}' OR marketplace_code IS NULL)
+      ORDER BY created_at DESC
+      LIMIT 50
+    `);
+    signalRows = rows || [];
+  } catch(e) {
+    el.innerHTML = errPanel('Action Center unavailable', e.message);
+    return;
+  }
+  const scopeLabel = 'Showing signals for selected marketplace: ' + mp;
+  if (signalRows.length === 0) {
+    el.innerHTML = '<div class="review-toolbar"><span>' + scopeLabel + '</span><span class="review-dryrun-note">Preview only - no ClickUp task created.</span></div>' + '<div class="empty-state">No signals for selected marketplace.</div>';
+    $('ac-kpi-actioned').querySelector('.card-value').textContent = '0';
+    $('ac-kpi-open').querySelector('.card-value').textContent = '0';
+    $('ac-kpi-overdue').querySelector('.card-value').textContent = '0';
+    $('ac-kpi-done').querySelector('.card-value').textContent = '0';
+    meta.textContent = '0 signals for ' + mp;
+    return;
+  }
+  let cuMap = {};
+  let cuFailed = false;
+  try {
+    const resp = await fetch('/api/clickup-signals');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (!data.error) (data.tasks || []).forEach(t => { cuMap[t.task_id] = t; });
+      else cuFailed = true;
+    } else cuFailed = true;
+  } catch(e) { cuFailed = true; }
+  const now = new Date();
+  const merged = signalRows.map(s => {
+    const tid = s.clickup_task_id || '';
+    const cu = cuMap[tid] || null;
+    const cuStatus = cu ? cu.status : null;
+    const cuAssignees = cu ? (cu.assignees || []).join(', ') : '';
+    const cuPriority = cu ? cu.priority : null;
+    const cuDue = cu ? cu.due_date : null;
+    const cuUpdated = cu ? cu.date_updated : null;
+    const cuUrl = cu ? cu.url : (tid ? 'https://app.clickup.com/t/' + tid : '');
+    let dueInfo = { text: '-', cls: '', daysRemaining: null };
+    if (cuDue) {
+      const dueDate = new Date(cuDue);
+      const diffDays = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) dueInfo = { text: Math.abs(diffDays) + 'd overdue', cls: 'acos-red', daysRemaining: diffDays };
+      else if (diffDays <= 2) dueInfo = { text: diffDays + 'd remaining', cls: 'acos-yellow', daysRemaining: diffDays };
+      else dueInfo = { text: diffDays + 'd remaining', cls: 'td-muted', daysRemaining: diffDays };
+    }
+    const isDone = cuStatus && ['done', 'complete', 'closed', 'resolved'].includes(cuStatus.toLowerCase());
+    const isInProgress = cuStatus && ['in progress', 'in review', 'review'].includes(cuStatus.toLowerCase());
+    const isAssigned = cuAssignees.length > 0;
+    let stage = 'Detected';
+    if (isDone) stage = 'Done'; else if (isInProgress) stage = 'In Progress'; else if (isAssigned) stage = 'Assigned'; else if (s.status === 'actioned' || tid) stage = 'Actioned';
+    const ownerMismatch = cu && cuAssignees && s.owner_name && !cuAssignees.toLowerCase().includes((s.owner_name || '').split(' ')[0].toLowerCase());
+    return { ...s, tid, cu, cuStatus, cuAssignees, cuPriority, cuDue, cuUpdated, cuUrl, dueInfo, stage, isDone, ownerMismatch };
+  });
+  const withTask = merged.filter(m => m.tid);
+  const openTasks = withTask.filter(m => !m.isDone);
+  const doneTasks = withTask.filter(m => m.isDone);
+  const overdueOrSoon = merged.filter(m => m.dueInfo.daysRemaining !== null && m.dueInfo.daysRemaining <= 2 && !m.isDone);
+  $('ac-kpi-actioned').querySelector('.card-value').textContent = withTask.length;
+  $('ac-kpi-open').querySelector('.card-value').textContent = openTasks.length;
+  $('ac-kpi-overdue').querySelector('.card-value').textContent = overdueOrSoon.length;
+  $('ac-kpi-done').querySelector('.card-value').textContent = doneTasks.length;
+  if (overdueOrSoon.length > 0) $('ac-kpi-overdue').querySelector('.card-value').style.color = 'var(--red)';
+  meta.textContent = merged.length + ' signals for ' + mp;
+  const stageColors = { 'Detected':'var(--text-muted)', 'Actioned':'var(--blue)', 'Assigned':'#a78bfa', 'In Progress':'var(--yellow)', 'Done':'var(--green)' };
+  const stageOrder = ['Detected', 'Actioned', 'Assigned', 'In Progress', 'Done'];
+  const cuWarning = cuFailed ? '<div style="background:rgba(245,158,11,0.1);border:1px solid var(--yellow);border-radius:6px;padding:6px 10px;margin-bottom:10px;font-size:12px;color:var(--yellow);">ClickUp status unavailable - showing signal data only</div>' : '';
+  el.innerHTML = cuWarning + '<div class="review-toolbar"><span>' + scopeLabel + '</span><span class="review-dryrun-note">Preview only - no ClickUp task created.</span></div>' + '<div class="table-wrap"><table>' + '<thead><tr><th>Signal</th><th>Lifecycle</th><th>Owner</th><th>ClickUp Assignee</th><th>ClickUp Status</th><th>Priority</th><th>Due</th><th>Task</th><th>Manual Review Queue</th></tr></thead>' + '<tbody>' + merged.map(m => {
+    const sevColor = (m.severity||'').toUpperCase() === 'CRITICAL' ? 'var(--red)' : (m.severity||'').toUpperCase() === 'HIGH' ? 'var(--yellow)' : 'var(--text-muted)';
+    const signalLabel = (m.signal_type || '').replace(/_/g, ' ');
+    const safeTitle = (m.headline || signalLabel || 'Signal review').replace(/'/g, "\'").replace(/"/g, '&quot;');
+    const safeSignal = (m.signal_id || '').replace(/'/g, "\'");
+    const safeAsin = (m.asin || '').replace(/'/g, "\'");
+    const pills = stageOrder.map(s => { const active = s === m.stage; const bg = active ? stageColors[s] : 'transparent'; const color = active ? '#fff' : 'var(--text-muted)'; const border = active ? 'none' : '1px solid var(--border)'; return `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:${active?600:400};background:${bg};color:${color};border:${border};margin-right:2px;">${s}</span>`; }).join('');
+    const ownerCell = m.owner_name || '-';
+    const assigneeCell = m.cuAssignees || (m.cu ? '-' : '<span class="td-muted">-</span>');
+    const mismatchIcon = m.ownerMismatch ? ' <span title="Owner/assignee mismatch" style="color:var(--yellow);font-size:11px;">!</span>' : '';
+    let statusCell = '<span class="td-muted">-</span>';
+    if (m.cuStatus) { const stColor = m.cu?.status_color || 'var(--text-muted)'; statusCell = `<span style="color:${stColor};font-weight:600;font-size:11px;">${m.cuStatus.toUpperCase()}</span>`; if (m.cuUpdated) statusCell += `<br><span class="td-muted" style="font-size:9px;">updated ${fmt.relTime(m.cuUpdated)}</span>`; }
+    const priColors = { urgent:'var(--red)', high:'var(--yellow)', normal:'var(--blue)', low:'var(--text-muted)' };
+    const priCell = m.cuPriority && m.cuPriority !== 'none' ? `<span class="badge" style="background:${priColors[m.cuPriority]||'var(--text-muted)'};color:#fff;font-size:10px;">${m.cuPriority}</span>` : '<span class="td-muted">-</span>';
+    const dueCell = m.dueInfo.text !== '-' ? `<span class="${m.dueInfo.cls}" style="font-size:11px;font-weight:600;">${m.dueInfo.text}</span>` : '<span class="td-muted">-</span>';
+    const taskLink = m.tid ? `<a href="${m.cuUrl}" target="_blank" rel="noopener" style="color:var(--blue);font-size:11px;">${m.tid}</a>` : '-';
+    const reviewActions = `<div class="decision-actions"><button class="review-btn assign" onclick="openTaskModal('${safeSignal}', '${safeAsin}', '${safeTitle}', 'home')">Assign Preview</button><button class="review-btn needs-review" onclick="markReviewDecision(this, 'Needs Review')">Needs Review</button><button class="review-btn ignore" onclick="markReviewDecision(this, 'Ignored')">Ignore</button></div><div class="review-decision-note">Dry-run queue only</div>`;
+    return '<tr>' + `<td><span style="color:${sevColor};font-size:11px;font-weight:600;">${signalLabel}</span><br><span class="mono" style="font-size:10px;color:var(--text-muted);">${m.asin || m.signal_id || ''}</span></td>` + `<td style="white-space:nowrap;">${pills}</td>` + `<td><span class="badge badge-blue" style="font-size:11px;">${ownerCell}</span></td>` + `<td style="font-size:11px;">${assigneeCell}${mismatchIcon}</td>` + `<td>${statusCell}</td>` + `<td>${priCell}</td>` + `<td>${dueCell}</td>` + `<td>${taskLink}</td>` + `<td>${reviewActions}</td>` + '</tr>';
+  }).join('') + '</tbody></table></div>';
+}
+
+// ============================================================
+//  HOME: COMPETITOR WATCH
+// ============================================================
+async function loadCompetitorWatch(mp) {
+  const el = $('comp-watch-body');
+  const meta = $('comp-watch-meta');
+  const mpMap = { UK: 'UK', US: 'US', CA: 'CA', DE: 'DE' };
+  const marketplace = mpMap[mp] || 'UK';
+
+  try {
+    // Fetch all keepa data for this marketplace (7 days)
+    const resp = await fetch(`/api/keepa-data?days=7&marketplace=${marketplace}`);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const rows = data.rows || [];
+
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="empty-state">No scraper data available for ' + mp + '. Scraper runs daily at 06:00 UTC.</div>';
+      $('cw-kpi-bsr').querySelector('.card-value').textContent = '0';
+      $('cw-kpi-price').querySelector('.card-value').textContent = '0';
+      $('cw-kpi-review').querySelector('.card-value').textContent = '0';
+      $('cw-kpi-tracked').querySelector('.card-value').textContent = '0';
+      meta.textContent = 'No data';
+      return;
+    }
+
+    // Group by ASIN, sort by date
+    const byAsin = {};
+    rows.forEach(r => {
+      if (!byAsin[r.asin]) byAsin[r.asin] = [];
+      byAsin[r.asin].push(r);
+    });
+    Object.values(byAsin).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
+
+    const totalTracked = Object.keys(byAsin).length;
+
+    // Compute changes per ASIN (latest vs earliest available)
+    const alerts = [];
+    Object.entries(byAsin).forEach(([asin, snapshots]) => {
+      const first = snapshots[0];
+      const last = snapshots[snapshots.length - 1];
+      const daySpan = snapshots.length;
+      const isMultiDay = daySpan > 1;
+
+      const bsrNow = last.bsr;
+      const bsrPrev = first.bsr;
+      const priceNow = last.price_buybox_pence;
+      const pricePrev = first.price_buybox_pence;
+      const reviewsNow = last.review_count;
+      const reviewsPrev = first.review_count;
+      const ratingNow = last.rating;
+
+      // BSR change (higher = worse)
+      let bsrPct = null;
+      if (bsrNow && bsrPrev && bsrPrev > 0 && isMultiDay) {
+        bsrPct = ((bsrNow - bsrPrev) / bsrPrev * 100);
+      }
+
+      // Price change
+      let pricePct = null;
+      if (priceNow && pricePrev && pricePrev > 0 && isMultiDay) {
+        pricePct = ((priceNow - pricePrev) / pricePrev * 100);
+      }
+
+      // Review change
+      let reviewPct = null;
+      if (reviewsNow && reviewsPrev && reviewsPrev > 0 && isMultiDay) {
+        reviewPct = ((reviewsNow - reviewsPrev) / reviewsPrev * 100);
+      }
+
+      // Flag if any threshold exceeded
+      const bsrAlert = bsrPct !== null && bsrPct > 15;    // BSR worsened >15%
+      const bsrImproved = bsrPct !== null && bsrPct < -15; // BSR improved >15%
+      const priceAlert = pricePct !== null && Math.abs(pricePct) > 10; // price moved >10%
+      const reviewAlert = reviewPct !== null && reviewPct > 20; // reviews surged >20%
+
+      const hasAlert = bsrAlert || bsrImproved || priceAlert || reviewAlert;
+
+      alerts.push({
+        asin, isMultiDay, daySpan,
+        bsrNow, bsrPrev, bsrPct, bsrAlert, bsrImproved,
+        priceNow: priceNow ? (priceNow / 100).toFixed(2) : null,
+        pricePrev: pricePrev ? (pricePrev / 100).toFixed(2) : null,
+        pricePct, priceAlert,
+        reviewsNow, reviewsPrev, reviewPct, reviewAlert,
+        ratingNow,
+        hasAlert,
+        dateFrom: first.date,
+        dateTo: last.date
+      });
+    });
+
+    // Sort: alerts first, then by BSR change magnitude
+    alerts.sort((a, b) => {
+      if (a.hasAlert !== b.hasAlert) return a.hasAlert ? -1 : 1;
+      return Math.abs(b.bsrPct || 0) - Math.abs(a.bsrPct || 0);
+    });
+
+    // KPIs
+    const bsrAlertCount = alerts.filter(a => a.bsrAlert).length;
+    const priceAlertCount = alerts.filter(a => a.priceAlert).length;
+    const reviewAlertCount = alerts.filter(a => a.reviewAlert).length;
+
+    $('cw-kpi-bsr').querySelector('.card-value').textContent = bsrAlertCount;
+    if (bsrAlertCount > 0) $('cw-kpi-bsr').querySelector('.card-value').style.color = 'var(--red)';
+    $('cw-kpi-price').querySelector('.card-value').textContent = priceAlertCount;
+    if (priceAlertCount > 0) $('cw-kpi-price').querySelector('.card-value').style.color = 'var(--yellow)';
+    $('cw-kpi-review').querySelector('.card-value').textContent = reviewAlertCount;
+    if (reviewAlertCount > 0) $('cw-kpi-review').querySelector('.card-value').style.color = 'var(--yellow)';
+    $('cw-kpi-tracked').querySelector('.card-value').textContent = totalTracked;
+    meta.textContent = alerts.filter(a => a.hasAlert).length + ' alerts · ' + totalTracked + ' ASINs tracked';
+
+    // Currency symbol
+    const sym = fmt.mpSym(mp);
+
+    // Render table
+    el.innerHTML = '<div class="table-wrap"><table>' +
+      '<thead><tr>' +
+        '<th>ASIN</th><th>Type</th>' +
+        '<th class="text-right">BSR Now</th><th class="text-right">BSR Prev</th><th class="text-right">BSR Δ%</th>' +
+        '<th class="text-right">Price Now</th><th class="text-right">Price Prev</th><th class="text-right">Price Δ%</th>' +
+        '<th class="text-right">Reviews</th><th class="text-right">Rev Δ%</th>' +
+        '<th class="text-right">Rating</th><th>Period</th>' +
+      '</tr></thead>' +
+      '<tbody>' + alerts.map(a => {
+        const type = a.isMultiDay
+          ? '<span class="badge" style="background:var(--blue);color:#fff;font-size:9px;">OWN</span>'
+          : '<span class="badge badge-gray" style="font-size:9px;">COMPETITOR</span>';
+
+        // BSR formatting
+        let bsrCell = '<td class="text-right td-muted">—</td><td class="text-right td-muted">—</td><td class="text-right td-muted">—</td>';
+        if (a.bsrPct !== null) {
+          const bsrCls = a.bsrAlert ? 'acos-red' : a.bsrImproved ? 'delta-pos' : '';
+          const bsrSign = a.bsrPct > 0 ? '+' : '';
+          const bsrIcon = a.bsrAlert ? ' ▼' : a.bsrImproved ? ' ▲' : '';
+          bsrCell = `<td class="text-right">${fmt.num(a.bsrNow)}</td>` +
+            `<td class="text-right td-muted">${fmt.num(a.bsrPrev)}</td>` +
+            `<td class="text-right ${bsrCls}" style="font-weight:600;">${bsrSign}${a.bsrPct.toFixed(1)}%${bsrIcon}</td>`;
+        } else if (a.bsrNow) {
+          bsrCell = `<td class="text-right">${fmt.num(a.bsrNow)}</td><td class="text-right td-muted">—</td><td class="text-right td-muted">—</td>`;
+        }
+
+        // Price formatting
+        let priceCell = '<td class="text-right td-muted">—</td><td class="text-right td-muted">—</td><td class="text-right td-muted">—</td>';
+        if (a.pricePct !== null) {
+          const priceCls = a.priceAlert ? (a.pricePct < 0 ? 'acos-red' : 'acos-yellow') : '';
+          const priceSign = a.pricePct > 0 ? '+' : '';
+          priceCell = `<td class="text-right">${sym}${a.priceNow}</td>` +
+            `<td class="text-right td-muted">${sym}${a.pricePrev}</td>` +
+            `<td class="text-right ${priceCls}" style="font-weight:600;">${priceSign}${a.pricePct.toFixed(1)}%</td>`;
+        } else if (a.priceNow) {
+          priceCell = `<td class="text-right">${sym}${a.priceNow}</td><td class="text-right td-muted">—</td><td class="text-right td-muted">—</td>`;
+        }
+
+        // Review formatting
+        let revCell = '<td class="text-right td-muted">—</td><td class="text-right td-muted">—</td>';
+        if (a.reviewPct !== null) {
+          const revCls = a.reviewAlert ? 'acos-yellow' : '';
+          const revSign = a.reviewPct > 0 ? '+' : '';
+          revCell = `<td class="text-right">${fmt.num(a.reviewsNow)}</td>` +
+            `<td class="text-right ${revCls}" style="font-weight:600;">${revSign}${a.reviewPct.toFixed(1)}%</td>`;
+        } else {
+          revCell = `<td class="text-right">${a.reviewsNow ? fmt.num(a.reviewsNow) : '—'}</td><td class="text-right td-muted">—</td>`;
+        }
+
+        // Rating
+        const ratingCell = a.ratingNow ? `<td class="text-right">${Number(a.ratingNow).toFixed(1)} ⭐</td>` : '<td class="text-right td-muted">—</td>';
+
+        // Period
+        const period = a.isMultiDay
+          ? `<td class="td-muted" style="font-size:10px;">${a.dateFrom} → ${a.dateTo}</td>`
+          : `<td class="td-muted" style="font-size:10px;">${a.dateTo} (snapshot)</td>`;
+
+        const rowCls = a.hasAlert ? 'style="background:rgba(239,68,68,0.03);"' : '';
+
+        return `<tr ${rowCls}>` +
+          `<td class="mono" style="font-size:11px;">${a.asin}</td>` +
+          `<td>${type}</td>` +
+          bsrCell + priceCell + revCell + ratingCell + period +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+
+  } catch(e) {
+    el.innerHTML = errPanel('Competitor Watch unavailable', e.message);
+    $('cw-kpi-bsr').querySelector('.card-value').textContent = '—';
+    $('cw-kpi-price').querySelector('.card-value').textContent = '—';
+    $('cw-kpi-review').querySelector('.card-value').textContent = '—';
+    $('cw-kpi-tracked').querySelector('.card-value').textContent = '—';
+    meta.textContent = 'Error loading data';
+  }
+}
+
+// ============================================================
+//  PAGE: SEARCH TERMS CONTROL
+// ============================================================
+async function loadSearchTerms(mp) {
+  const sym = fmt.mpSym(mp);
+  const store = storeFilter(mp);
+
+  // Freshness
+  try {
+    const { rows } = await bqQuery(`
+      SELECT MAX(week_start) AS latest
+      FROM \`newdatonproject.DataMart_marts.fact_keyword_performance\`
+      WHERE store_id = ${store}
+    `);
+    const latest = rows?.[0]?.latest ? String(rows[0].latest).slice(0,10) : '—';
+    $('st-freshness').textContent = 'Keyword data through: ' + latest + ' · weekly';
+  } catch(e) {
+    $('st-freshness').textContent = 'Freshness unavailable';
+  }
+
+  // Load all sections in parallel
+  await Promise.all([
+    loadSTBleeders(mp, sym, store),
+    loadSTNegatives(mp, sym, store),
+    loadSTHarvest(mp, sym, store),
+    loadSTSqpGaps(mp, store),
+    loadSTMovers(mp, store)
+  ]);
+}
+
+async function loadSTBleeders(mp, sym, store) {
+  const el = $('st-bleeders-body');
+  try {
+    const { rows } = await bqQuery(`
+      WITH dedup AS (
+        SELECT keyword,
+               CAST(ppc_spend AS FLOAT64) AS ppc_spend, CAST(ppc_sales AS FLOAT64) AS ppc_sales,
+               CAST(ppc_orders AS STRING) AS ppc_orders, CAST(ppc_acos AS FLOAT64) AS ppc_acos,
+               CAST(ppc_clicks AS STRING) AS ppc_clicks,
+               COUNT(DISTINCT asin) AS asin_count,
+               STRING_AGG(DISTINCT COALESCE(asin,'?'), ', ') AS asins,
+               MAX(recommended_action) AS recommended_action
+        FROM \`newdatonproject.DataMart_marts.fact_keyword_performance\`
+        WHERE store_id = ${store}
+          AND week_start = (SELECT MAX(week_start) FROM \`newdatonproject.DataMart_marts.fact_keyword_performance\` WHERE store_id = ${store})
+          AND CAST(ppc_spend AS FLOAT64) > 10
+          AND (CAST(ppc_sales AS FLOAT64) = 0 OR ppc_sales IS NULL OR CAST(ppc_acos AS FLOAT64) > 80)
+        GROUP BY week_start, keyword, CAST(ppc_spend AS FLOAT64), CAST(ppc_sales AS FLOAT64), CAST(ppc_orders AS STRING), CAST(ppc_clicks AS STRING), CAST(ppc_acos AS FLOAT64)
+      )
+      SELECT * FROM dedup ORDER BY ppc_spend DESC LIMIT 30
+    `);
+    const cnt = rows ? rows.length : 0;
+    const totalWaste = rows ? rows.reduce((s, r) => s + (Number(r.ppc_spend)||0), 0) : 0;
+    $('st-kpi-bleeders').querySelector('.card-value').textContent = fmt.currency(totalWaste, sym);
+    $('st-bleeders-meta').textContent = cnt + ' keywords (deduplicated)';
+    if (!rows || cnt === 0) {
+      el.innerHTML = '<div class="empty-state">✅ No bleeders found. All terms with spend > £10 are converting at ACOS < 80%.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="table-wrap"><table>' +
+      '<thead><tr><th>Keyword</th><th>ASINs</th><th>Attribution</th><th class="text-right">Spend</th><th class="text-right">Sales</th><th class="text-right">Orders</th><th class="text-right">ACOS</th><th class="text-right">Clicks</th><th>Action</th></tr></thead>' +
+      '<tbody>' + rows.map(r => {
+        const acosDisplay = (r.ppc_acos == null || r.ppc_sales == null || Number(r.ppc_sales) === 0)
+          ? '<span class="acos-red">No Sales</span>'
+          : '<span class="acos-red">' + Number(r.ppc_acos).toFixed(1) + '%</span>';
+        const badge = Number(r.asin_count) > 1
+          ? '<span style="background:rgba(245,158,11,0.15);color:var(--yellow);padding:1px 5px;border-radius:3px;font-size:10px;">KEYWORD_LEVEL</span>'
+          : '<span style="background:rgba(34,197,94,0.15);color:var(--green);padding:1px 5px;border-radius:3px;font-size:10px;">CLEAN</span>';
+        return '<tr>' +
+          '<td><span class="truncate" style="max-width:180px;display:block;" title="' + (r.keyword||'') + '">' + (r.keyword||'—') + '</span></td>' +
+          '<td class="td-muted" style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + (r.asins||'') + '">' + (r.asins||'—') + ' (' + r.asin_count + ')</td>' +
+          '<td>' + badge + '</td>' +
+          '<td class="text-right">' + fmt.currency(r.ppc_spend, sym) + '</td>' +
+          '<td class="text-right">' + fmt.currency(r.ppc_sales, sym) + '</td>' +
+          '<td class="text-right">' + fmt.num(r.ppc_orders) + '</td>' +
+          '<td class="text-right">' + acosDisplay + '</td>' +
+          '<td class="text-right">' + fmt.num(r.ppc_clicks) + '</td>' +
+          '<td><span class="badge badge-gray" style="font-size:10px;white-space:nowrap;">Review manually</span></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch(e) {
+    el.innerHTML = errPanel('Bleeders unavailable', e.message);
+    $('st-kpi-bleeders').querySelector('.card-value').textContent = '—';
+  }
+}
+
+async function loadSTNegatives(mp, sym, store) {
+  const el = $('st-negatives-body');
+  try {
+    const { rows } = await bqQuery(`
+      WITH dedup AS (
+        SELECT keyword,
+               CAST(ppc_spend AS FLOAT64) AS ppc_spend, CAST(ppc_clicks AS STRING) AS ppc_clicks,
+               CAST(ppc_orders AS STRING) AS ppc_orders, CAST(ppc_acos AS FLOAT64) AS ppc_acos,
+               COUNT(DISTINCT asin) AS asin_count,
+               STRING_AGG(DISTINCT COALESCE(asin,'?'), ', ') AS asins
+        FROM \`newdatonproject.DataMart_marts.fact_keyword_performance\`
+        WHERE store_id = ${store}
+          AND week_start = (SELECT MAX(week_start) FROM \`newdatonproject.DataMart_marts.fact_keyword_performance\` WHERE store_id = ${store})
+          AND ppc_performance_category = 'Negative Candidate'
+          AND CAST(ppc_spend AS FLOAT64) > 10
+        GROUP BY week_start, keyword, CAST(ppc_spend AS FLOAT64), CAST(ppc_sales AS FLOAT64), CAST(ppc_orders AS STRING), CAST(ppc_clicks AS STRING), CAST(ppc_acos AS FLOAT64)
+      )
+      SELECT * FROM dedup ORDER BY ppc_spend DESC LIMIT 30
+    `);
+    const cnt = rows ? rows.length : 0;
+    $('st-kpi-negatives').querySelector('.card-value').textContent = cnt;
+    $('st-negatives-meta').textContent = cnt + ' keywords (deduplicated)';
+    if (!rows || cnt === 0) {
+      el.innerHTML = '<div class="empty-state">✅ No negative keyword candidates with spend > £10.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="table-wrap"><table>' +
+      '<thead><tr><th>Keyword</th><th>ASINs</th><th>Attribution</th><th class="text-right">Spend</th><th class="text-right">Clicks</th><th class="text-right">Orders</th><th class="text-right">ACOS</th><th>Action</th></tr></thead>' +
+      '<tbody>' + rows.map(r => {
+        const acosDisplay = r.ppc_acos != null ? '<span class="acos-red">' + Number(r.ppc_acos).toFixed(1) + '%</span>' : '—';
+        const badge = Number(r.asin_count) > 1
+          ? '<span style="background:rgba(245,158,11,0.15);color:var(--yellow);padding:1px 5px;border-radius:3px;font-size:10px;">KEYWORD_LEVEL</span>'
+          : '<span style="background:rgba(34,197,94,0.15);color:var(--green);padding:1px 5px;border-radius:3px;font-size:10px;">CLEAN</span>';
+        return '<tr>' +
+          '<td><span class="truncate" style="max-width:180px;display:block;" title="' + (r.keyword||'') + '">' + (r.keyword||'—') + '</span></td>' +
+          '<td class="td-muted" style="font-size:11px;" title="' + (r.asins||'') + '">' + (r.asins||'—') + ' (' + r.asin_count + ')</td>' +
+          '<td>' + badge + '</td>' +
+          '<td class="text-right">' + fmt.currency(r.ppc_spend, sym) + '</td>' +
+          '<td class="text-right">' + fmt.num(r.ppc_clicks) + '</td>' +
+          '<td class="text-right">' + fmt.num(r.ppc_orders) + '</td>' +
+          '<td class="text-right">' + acosDisplay + '</td>' +
+          '<td><span class="badge badge-gray" style="font-size:10px;white-space:nowrap;">Validate in Amazon Ads</span></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch(e) {
+    el.innerHTML = errPanel('Negative candidates unavailable', e.message);
+    $('st-kpi-negatives').querySelector('.card-value').textContent = '—';
+  }
+}
+
+async function loadSTHarvest(mp, sym, store) {
+  const el = $('st-harvest-body');
+  try {
+    const { rows } = await bqQuery(`
+      WITH dedup AS (
+        SELECT keyword,
+               CAST(ppc_spend AS FLOAT64) AS ppc_spend, CAST(ppc_orders AS STRING) AS ppc_orders,
+               CAST(ppc_sales AS FLOAT64) AS ppc_sales, CAST(ppc_acos AS FLOAT64) AS ppc_acos,
+               MAX(CAST(ppc_roas AS FLOAT64)) AS ppc_roas,
+               COUNT(DISTINCT asin) AS asin_count,
+               STRING_AGG(DISTINCT COALESCE(asin,'?'), ', ') AS asins,
+               MIN(avg_organic_rank) AS best_rank
+        FROM \`newdatonproject.DataMart_marts.fact_keyword_performance\`
+        WHERE store_id = ${store}
+          AND week_start = (SELECT MAX(week_start) FROM \`newdatonproject.DataMart_marts.fact_keyword_performance\` WHERE store_id = ${store})
+          AND ppc_performance_category = 'Winner'
+          AND ppc_orders >= 3
+          AND CAST(ppc_acos AS FLOAT64) < 30
+          AND is_page_one_organic = FALSE
+        GROUP BY week_start, keyword, CAST(ppc_spend AS FLOAT64), CAST(ppc_sales AS FLOAT64), CAST(ppc_orders AS STRING), CAST(ppc_clicks AS STRING), CAST(ppc_acos AS FLOAT64)
+      )
+      SELECT * FROM dedup ORDER BY ppc_sales DESC LIMIT 30
+    `);
+    const cnt = rows ? rows.length : 0;
+    $('st-kpi-harvest').querySelector('.card-value').textContent = cnt;
+    $('st-harvest-meta').textContent = cnt + ' keywords (deduplicated) · NOT_ACTION_READY';
+    if (!rows || cnt === 0) {
+      el.innerHTML = '<div class="empty-state">No harvest candidates this week.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="table-wrap"><table>' +
+      '<thead><tr><th>Keyword</th><th>ASINs</th><th>Status</th><th class="text-right">Orders</th><th class="text-right">Sales</th><th class="text-right">ACOS</th><th class="text-right">ROAS</th><th class="text-right">Best Rank</th><th>Action</th></tr></thead>' +
+      '<tbody>' + rows.map(r => {
+        const acos = fmt.acos(r.ppc_acos);
+        const rank = r.best_rank ? Number(r.best_rank).toFixed(0) : '—';
+        const isDup = Number(r.asin_count) > 1;
+        const statusBadge = '<span style="background:rgba(239,68,68,0.15);color:var(--red);padding:1px 5px;border-radius:3px;font-size:10px;">NOT_ACTION_READY</span>';
+        return '<tr>' +
+          '<td><span class="truncate" style="max-width:180px;display:block;" title="' + (r.keyword||'') + '">' + (r.keyword||'—') + '</span></td>' +
+          '<td class="td-muted" style="font-size:11px;" title="' + (r.asins||'') + '">' + (r.asins||'—') + ' (' + r.asin_count + ')</td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td class="text-right">' + fmt.num(r.ppc_orders) + '</td>' +
+          '<td class="text-right">' + fmt.currency(r.ppc_sales, sym) + '</td>' +
+          '<td class="text-right ' + acos.cls + '">' + acos.text + '</td>' +
+          '<td class="text-right">' + (r.ppc_roas ? Number(r.ppc_roas).toFixed(1) + 'x' : '—') + '</td>' +
+          '<td class="text-right">' + rank + '</td>' +
+          '<td><span class="badge badge-gray" style="font-size:9px;white-space:nowrap;">Verify in Search Term Report</span></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch(e) {
+    el.innerHTML = errPanel('Harvest candidates unavailable', e.message);
+    $('st-kpi-harvest').querySelector('.card-value').textContent = '—';
+  }
+}
+
+async function loadSTSqpGaps(mp, store) {
+  const el = $('st-sqp-body');
+  try {
+    const { rows } = await bqQuery(`
+      SELECT asin, search_query, search_query_volume, avg_impression_share_pct, avg_click_share_pct,
+             avg_purchase_share_pct, share_vs_demand, volume_trend
+      FROM \`newdatonproject.DataMart_marts.v_dashboard_keyword_volume_trends\`
+      WHERE store_id = ${store}
+        AND week_start = (SELECT MAX(week_start) FROM \`newdatonproject.DataMart_marts.v_dashboard_keyword_volume_trends\` WHERE store_id = ${store})
+        AND CAST(search_query_volume AS INT64) > 500
+        AND CAST(avg_click_share_pct AS FLOAT64) < 2
+        AND CAST(avg_purchase_share_pct AS FLOAT64) < 1
+      ORDER BY CAST(search_query_volume AS INT64) DESC
+      LIMIT 30
+    `);
+    const cnt = rows ? rows.length : 0;
+    $('st-kpi-sqpgaps').querySelector('.card-value').textContent = cnt;
+    $('st-sqp-meta').textContent = cnt + ' rows (ASIN-level)';
+    if (!rows || cnt === 0) {
+      el.innerHTML = '<div class="empty-state">✅ No SQP opportunity gaps — good share on high-volume queries.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="table-wrap"><table>' +
+      '<thead><tr><th>ASIN</th><th>Search Query</th><th class="text-right">Volume</th><th class="text-right">Impr Share%</th><th class="text-right">Click Share%</th><th class="text-right">Purchase Share%</th><th>Share vs Demand</th><th>Volume Trend</th><th>Data Level</th></tr></thead>' +
+      '<tbody>' + rows.map(r => {
+        const shareCls = Number(r.avg_click_share_pct||0) < 1 ? 'acos-red' : 'acos-yellow';
+        const demandBadge = (r.share_vs_demand||'').replace(/_/g, ' ');
+        return '<tr>' +
+          '<td class="mono" style="font-size:11px;">' + (r.asin||'—') + '</td>' +
+          '<td><span class="truncate" style="max-width:200px;display:block;" title="' + (r.search_query||'') + '">' + (r.search_query||'—') + '</span></td>' +
+          '<td class="text-right">' + fmt.num(r.search_query_volume) + '</td>' +
+          '<td class="text-right td-muted">' + (r.avg_impression_share_pct != null ? Number(r.avg_impression_share_pct).toFixed(1) + '%' : '—') + '</td>' +
+          '<td class="text-right ' + shareCls + '">' + (r.avg_click_share_pct != null ? Number(r.avg_click_share_pct).toFixed(1) + '%' : '—') + '</td>' +
+          '<td class="text-right">' + (r.avg_purchase_share_pct != null ? Number(r.avg_purchase_share_pct).toFixed(1) + '%' : '—') + '</td>' +
+          '<td><span class="badge badge-gray" style="font-size:10px;">' + demandBadge + '</span></td>' +
+          '<td class="td-muted">' + (r.volume_trend||'—') + '</td>' +
+          '<td><span class="badge" style="background:var(--green);color:#fff;font-size:9px;">SQP_ASIN_LEVEL</span></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch(e) {
+    el.innerHTML = errPanel('SQP gaps unavailable', e.message);
+    $('st-kpi-sqpgaps').querySelector('.card-value').textContent = '—';
+  }
+}
+
+async function loadSTMovers(mp, store) {
+  const el = $('st-movers-body');
+  try {
+    const { rows } = await bqQuery(`
+      SELECT keyword, asin,
+             CAST(avg_organic_rank AS FLOAT64) AS rank_now,
+             CAST(prev_week_rank AS FLOAT64) AS rank_prev,
+             CAST(rank_improvement_wow AS FLOAT64) AS rank_change_raw,
+             CASE
+               WHEN CAST(avg_organic_rank AS FLOAT64) < CAST(prev_week_rank AS FLOAT64) THEN 'IMPROVED'
+               WHEN CAST(avg_organic_rank AS FLOAT64) > CAST(prev_week_rank AS FLOAT64) THEN 'DECLINED'
+               ELSE 'UNCHANGED'
+             END AS direction,
+             keyword_sales_4w, CAST(ppc_spend AS FLOAT64) AS ppc_spend,
+             CAST(impact_score AS FLOAT64) AS impact_score, rank_tier
+      FROM \`newdatonproject.DataMart_marts.t_dashboard_keyword_movers\`
+      WHERE store_id = ${store}
+        AND week_start = (SELECT MAX(week_start) FROM \`newdatonproject.DataMart_marts.t_dashboard_keyword_movers\` WHERE store_id = ${store})
+      ORDER BY ABS(CAST(rank_improvement_wow AS FLOAT64)) DESC
+      LIMIT 30
+    `);
+    const cnt = rows ? rows.length : 0;
+    $('st-movers-meta').textContent = cnt + ' keywords';
+    if (!rows || cnt === 0) {
+      el.innerHTML = '<div class="empty-state">No keyword rank movers this week.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="table-wrap"><table>' +
+      '<thead><tr><th>Keyword</th><th>ASIN</th><th>Direction</th><th class="text-right">Rank Now</th><th class="text-right">Rank Prev</th><th class="text-right">Change</th><th class="text-right">Sales (4w)</th><th class="text-right">PPC Spend</th><th class="text-right">Impact</th></tr></thead>' +
+      '<tbody>' + rows.map(r => {
+        const rankNow = Number(r.rank_now||0);
+        const rankPrev = Number(r.rank_prev||0);
+        const change = rankNow - rankPrev;
+        const dir = r.direction || 'UNCHANGED';
+        const dirColor = dir === 'IMPROVED' ? 'var(--green)' : dir === 'DECLINED' ? 'var(--red)' : 'var(--text-muted)';
+        const dirIcon = dir === 'IMPROVED' ? '▲' : dir === 'DECLINED' ? '▼' : '—';
+        const changeCls = dir === 'IMPROVED' ? 'delta-pos' : dir === 'DECLINED' ? 'delta-neg' : '';
+        const changeSign = change > 0 ? '+' : '';
+        return '<tr>' +
+          '<td><span class="truncate" style="max-width:200px;display:block;" title="' + (r.keyword||'') + '">' + (r.keyword||'—') + '</span></td>' +
+          '<td class="mono" style="font-size:11px;">' + (r.asin||'—') + '</td>' +
+          '<td><span style="color:' + dirColor + ';font-weight:600;font-size:11px;">' + dirIcon + ' ' + dir + '</span></td>' +
+          '<td class="text-right">' + (rankNow ? rankNow.toFixed(0) : '—') + '</td>' +
+          '<td class="text-right td-muted">' + (rankPrev ? rankPrev.toFixed(0) : '—') + '</td>' +
+          '<td class="text-right"><span class="' + changeCls + '">' + changeSign + change.toFixed(1) + '</span></td>' +
+          '<td class="text-right">' + fmt.num(r.keyword_sales_4w) + '</td>' +
+          '<td class="text-right td-muted">' + (r.ppc_spend ? fmt.currency(r.ppc_spend, fmt.mpSym(mp)) : '—') + '</td>' +
+          '<td class="text-right td-muted">' + (r.impact_score ? Number(r.impact_score).toFixed(1) : '—') + '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch(e) {
+    el.innerHTML = errPanel('Rank movers unavailable', e.message);
+  }
+}
+
+// ============================================================
+//  PAGE: SCORECARD
+// ============================================================
+function computeHealthScore(margin, tacos, organic, returnRate, bsr, rating) {
+  function s(val, thresholds) {
+    // thresholds: [[comparator, value, score], ...]
+    if (val == null || isNaN(val)) return 0;
+    val = Number(val);
+    for (const [op, thresh, score] of thresholds) {
+      if (op === '>' && val > thresh) return score;
+      if (op === '<' && val < thresh) return score;
+      if (op === '>=' && val >= thresh) return score;
+    }
+    return 0;
+  }
+  const marginScore  = s(margin,     [['>', 30, 100], ['>', 20, 60], ['>', 10, 30]]);
+  const tacosScore   = s(tacos,      [['<', 10, 100], ['<', 15, 70], ['<', 25, 40]]);
+  const organicScore = s(organic,    [['>', 70, 100], ['>', 50, 60], ['>', 30, 30]]);
+  const returnScore  = s(returnRate, [['<', 2, 100],  ['<', 5, 70],  ['<', 10, 30]]);
+  const bsrScore     = s(bsr,        [['<', 5000, 100], ['<', 15000, 70], ['<', 50000, 40]]);
+  const ratingScore  = s(rating,     [['>=', 4.5, 100], ['>=', 4.0, 70], ['>=', 3.5, 40]]);
+
+  return Math.round(
+    marginScore * 0.25 +
+    tacosScore * 0.20 +
+    organicScore * 0.15 +
+    returnScore * 0.10 +
+    bsrScore * 0.15 +
+    ratingScore * 0.15
+  );
+}
+
+function healthBadge(score) {
+  if (score == null) return '<span class="badge badge-gray">—</span>';
+  let bg, color;
+  if (score >= 80)      { bg = 'rgba(34,197,94,0.15)';  color = '#22c55e'; }
+  else if (score >= 60) { bg = 'rgba(245,158,11,0.15)'; color = '#f59e0b'; }
+  else if (score >= 40) { bg = 'rgba(249,115,22,0.15)'; color = '#f97316'; }
+  else                  { bg = 'rgba(239,68,68,0.15)';  color = '#ef4444'; }
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;background:${bg};color:${color};">${score}</span>`;
+}
+
+function colorPct(val, greenAbove, yellowAbove, invert) {
+  if (val == null || isNaN(val)) return '<span style="color:var(--text-muted);">—</span>';
+  const v = Number(val);
+  let color;
+  if (invert) {
+    // lower is better (TACOS, return rate)
+    if (v < greenAbove) color = '#22c55e';
+    else if (v < yellowAbove) color = '#f59e0b';
+    else color = '#ef4444';
+  } else {
+    // higher is better (margin, organic)
+    if (v > greenAbove) color = '#22c55e';
+    else if (v > yellowAbove) color = '#f59e0b';
+    else color = '#ef4444';
+  }
+  return `<span style="color:${color};font-weight:600;">${v.toFixed(1)}%</span>`;
+}
+
+
+// ============================================================
+//  SCORECARD SORT
+// ============================================================
+let scData = [];
+let scSortCol = 'revenue';
+let scSortDir = 'desc';
+let scSym = '\u00a3';
+
+function getSortVal(row, col) {
+  switch(col) {
+    case 'product_name': return (row.product_name || '').toLowerCase();
+    case 'category': return (row.category || '').toLowerCase();
+    case 'revenue': return row.revenue;
+    case 'profit': return row.profit;
+    case 'margin': return isNaN(row.margin) ? null : row.margin;
+    case 'tacos': return isNaN(row.tacos) ? null : row.tacos;
+    case 'organic': return isNaN(row.organic) ? null : row.organic;
+    case 'bsr': return row.keepa.bsr;
+    case 'rating': return row.keepa.rating;
+    case 'reviews': return row.keepa.reviews;
+    case 'price': return row.keepa.price;
+    case 'returnRate': return isNaN(row.returnRate) ? null : row.returnRate;
+    case 'health': return row.health;
+    case 'profitability_tier': return (row.profitability_tier || '').toLowerCase();
+    default: return null;
+  }
+}
+
+function renderScorecardTable() {
+  const el = $('sc-body');
+  if (!scData.length) return;
+  const sorted = [...scData].sort((a, b) => {
+    let va = getSortVal(a, scSortCol);
+    let vb = getSortVal(b, scSortCol);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'string') {
+      const cmp = va.localeCompare(vb);
+      return scSortDir === 'asc' ? cmp : -cmp;
+    }
+    return scSortDir === 'asc' ? va - vb : vb - va;
+  });
+  const sym = scSym;
+  const tableRows = sorted.map(r => {
+    const name = r.product_name ? (r.product_name.length > 40 ? r.product_name.substring(0, 40) + '\u2026' : r.product_name) : r.asin;
+    let bsrCell = '\u2014';
+    if (r.keepa.bsr != null) {
+      let ti = '';
+      if (r.keepa.bsrTrend != null) {
+        if (r.keepa.bsrTrend < -100) ti = ' <span style="color:#22c55e;font-size:10px;">\u25BC</span>';
+        else if (r.keepa.bsrTrend > 100) ti = ' <span style="color:#ef4444;font-size:10px;">\u25B2</span>';
+        else ti = ' <span style="color:var(--text-muted);font-size:10px;">\u2192</span>';
+      }
+      bsrCell = fmt.num(r.keepa.bsr) + ti;
+    }
+    const ratingCell = r.keepa.rating != null ? '<span style="color:#f59e0b;">\u2605</span> ' + r.keepa.rating.toFixed(1) : '\u2014';
+    const reviewCell = r.keepa.reviews != null ? fmt.num(r.keepa.reviews) : '\u2014';
+    const priceCell = r.keepa.price != null ? fmt.currency(r.keepa.price, sym) : '\u2014';
+    return '<tr>' +
+      '<td><span class="truncate" style="max-width:220px;display:block;" title="' + (r.product_name||'').replace(/"/g,'&amp;quot;') + '">' + name + '</span><span class="mono" style="font-size:10px;color:var(--text-muted);">' + r.asin + '</span></td>' +
+      '<td style="font-size:11px;">' + (r.category || '\u2014') + '</td>' +
+      '<td class="text-right">' + fmt.currency(r.revenue, sym) + '</td>' +
+      '<td class="text-right">' + fmt.currency(r.profit, sym) + '</td>' +
+      '<td class="text-right">' + colorPct(r.margin, 20, 10, false) + '</td>' +
+      '<td class="text-right">' + colorPct(r.tacos, 15, 25, true) + '</td>' +
+      '<td class="text-right">' + colorPct(r.organic, 60, 40, false) + '</td>' +
+      '<td class="text-right">' + bsrCell + '</td>' +
+      '<td class="text-right">' + ratingCell + '</td>' +
+      '<td class="text-right">' + reviewCell + '</td>' +
+      '<td class="text-right">' + priceCell + '</td>' +
+      '<td class="text-right">' + colorPct(r.returnRate, 2, 5, true) + '</td>' +
+      '<td class="text-right">' + healthBadge(r.health) + '</td>' +
+      '<td>' + tierBadge(r.profitability_tier) + '</td>' +
+    '</tr>';
+  }).join('');
+  const cols = [
+    ['product_name','Product',false],['category','Category',false],
+    ['revenue','Revenue',true],['profit','Profit',true],
+    ['margin','Margin %',true],['tacos','TACOS %',true],
+    ['organic','Organic %',true],['bsr','BSR',true],
+    ['rating','Rating',true],['reviews','Reviews',true],
+    ['price','Price',true],['returnRate','Return %',true],
+    ['health','Health',true],['profitability_tier','Tier',false]
+  ];
+  const ths = cols.map(function(c) {
+    const cls = 'sortable' + (scSortCol === c[0] ? ' ' + scSortDir : '') + (c[2] ? ' text-right' : '');
+    return '<th class="' + cls + '" data-sort="' + c[0] + '">' + c[1] + '</th>';
+  }).join('');
+  el.innerHTML = '<div class="table-wrap"><table id="sc-table"><thead><tr>' + ths + '</tr></thead><tbody>' + tableRows + '</tbody></table></div>';
+  el.querySelectorAll('th.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+      const col = th.dataset.sort;
+      if (scSortCol === col) { scSortDir = scSortDir === 'asc' ? 'desc' : 'asc'; }
+      else { scSortCol = col; scSortDir = 'desc'; }
+      renderScorecardTable();
+    });
+  });
+}
+
+async function loadScorecard(mp) {
+  const sym = fmt.mpSym(mp);
+  const el = $('sc-body');
+  const meta = $('sc-meta');
+  const store = storeFilter(mp);
+  const mpMap = { UK: 'UK', US: 'US', CA: 'CA', DE: 'DE' };
+  const marketplace = mpMap[mp] || 'UK';
+
+  try {
+    // Fetch profitability data and keepa data in parallel
+    const [profRes, keepaResp] = await Promise.all([
+      bqQuery(`
+        SELECT
+          p.asin,
+          p.product_name,
+          p.category,
+          p.profitability_tier,
+          CAST(p.gross_revenue AS FLOAT64) AS revenue,
+          CAST(p.estimated_net_profit AS FLOAT64) AS profit,
+          CAST(p.estimated_margin_pct AS FLOAT64) AS margin_pct,
+          CAST(p.total_ad_spend AS FLOAT64) AS ad_spend,
+          CAST(p.tacos AS FLOAT64) AS tacos,
+          CAST(p.gross_units_sold AS FLOAT64) AS units,
+          CAST(p.organic_revenue_pct AS FLOAT64) AS organic_pct,
+          CAST(p.return_rate_pct AS FLOAT64) AS return_rate,
+          CAST(p.roas AS FLOAT64) AS roas,
+          p.primary_improvement_opportunity
+        FROM \`newdatonproject.DataMart_marts.fact_true_profitability\` p
+        WHERE p.store_id = ${store}
+          AND p.week_status = 'SOLD'
+          AND CAST(p.gross_revenue AS FLOAT64) > 0
+          AND p.week_start = (
+            SELECT MAX(week_start)
+            FROM \`newdatonproject.DataMart_marts.fact_true_profitability\`
+            WHERE store_id = ${store}
+              AND week_status = 'SOLD'
+              AND CAST(gross_revenue AS FLOAT64) > 0
+          )
+        ORDER BY CAST(p.gross_revenue AS FLOAT64) DESC
+        LIMIT 200
+      `),
+      fetch(`/api/keepa-data?days=7&marketplace=${marketplace}`)
+        .then(r => r.ok ? r.json() : { rows: [] })
+        .catch(() => ({ rows: [] }))
+    ]);
+
+    const rows = profRes.rows || [];
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="empty-state">No scorecard data found for this marketplace.</div>';
+      return;
+    }
+
+    // Process keepa data — group by ASIN, get latest + trend
+    const keepaRows = (keepaResp.rows || []);
+    const keepaByAsin = {};
+    keepaRows.forEach(r => {
+      if (!keepaByAsin[r.asin]) keepaByAsin[r.asin] = [];
+      keepaByAsin[r.asin].push(r);
+    });
+    Object.values(keepaByAsin).forEach(arr => arr.sort((a, b) => (a.date||'').localeCompare(b.date||'')));
+
+    const keepaLatest = {};
+    for (const [asin, arr] of Object.entries(keepaByAsin)) {
+      const latest = arr[arr.length - 1];
+      const earliest = arr[0];
+      const bsrNow = latest.bsr != null ? Number(latest.bsr) : null;
+      const bsrThen = earliest.bsr != null ? Number(earliest.bsr) : null;
+      let bsrTrend = null;
+      if (bsrNow != null && bsrThen != null && bsrThen !== 0) {
+        bsrTrend = bsrNow - bsrThen; // negative = improved (lower BSR = better)
+      }
+      keepaLatest[asin] = {
+        bsr: bsrNow,
+        bsrTrend,
+        price: latest.price_buybox_pence != null ? Number(latest.price_buybox_pence) / 100 : null,
+        rating: latest.rating != null ? Number(latest.rating) : null,
+        reviews: latest.review_count != null ? Number(latest.review_count) : null
+      };
+    }
+
+    // Merge and compute
+    let totalRevenue = 0, totalProfit = 0, weightedMargin = 0;
+    const merged = rows.map(r => {
+      const rev = Number(r.revenue) || 0;
+      const profit = Number(r.profit) || 0;
+      const margin = Number(r.margin_pct);
+      const tacos = Number(r.tacos);
+      const organic = Number(r.organic_pct);
+      const returnRate = Number(r.return_rate);
+
+      totalRevenue += rev;
+      totalProfit += profit;
+      weightedMargin += (isNaN(margin) ? 0 : margin) * rev;
+
+      const k = keepaLatest[r.asin] || {};
+      const health = computeHealthScore(margin, tacos, organic, returnRate, k.bsr, k.rating);
+
+      return { ...r, revenue: rev, profit, margin, tacos, organic, returnRate, keepa: k, health };
+    });
+
+    const avgMargin = totalRevenue > 0 ? weightedMargin / totalRevenue : 0;
+
+    // Populate KPIs
+    $('sc-kpi-revenue').querySelector('.card-value').textContent = fmt.currency(totalRevenue, sym);
+    $('sc-kpi-profit').querySelector('.card-value').textContent = fmt.currency(totalProfit, sym);
+    $('sc-kpi-margin').querySelector('.card-value').textContent = fmt.pct(avgMargin);
+    $('sc-kpi-asins').querySelector('.card-value').textContent = merged.length;
+
+    if (meta) meta.textContent = `${merged.length} ASINs · latest SOLD week`;
+
+    // Store data for sorting and render
+    scData = merged;
+    scSym = sym;
+    scSortCol = 'revenue';
+    scSortDir = 'desc';
+    renderScorecardTable();
+
+  } catch(e) {
+    console.error('Scorecard load error:', e);
+    el.innerHTML = errPanel('Scorecard data unavailable', e.message);
+  }
+}
+
+
+// ============================================================
+//  MANUAL ASSIGN PREVIEW (Phase 1A dry-run only)
+// ============================================================
+// openTaskModal — merged into Phase 2A block above
+function closeTaskModal(e) { if (e && e.target !== e.currentTarget) return; document.getElementById('task-modal-overlay').style.display = 'none'; }
+function markReviewDecision(btn, label) { const cell = btn.closest('td'); const note = cell ? cell.querySelector('.review-decision-note') : null; if (note) note.textContent = label + ' (local preview only)'; }
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeTaskModal(); });
+// ============================================================
+//  LIVE MODE STATE (Phase 2A) — always OFF on page load
+// ============================================================
+let _liveModeActive = false;  // reset on every page load — never persisted
+
+function onLiveModeToggle(on) {
+  _liveModeActive = on;
+  const bar  = document.getElementById('live-mode-bar');
+  const stat = document.getElementById('live-mode-status');
+  bar.classList.toggle('active', on);
+  stat.textContent = on ? 'LIVE MODE ACTIVE' : 'Preview Only';
+  // Update all create-task buttons
+  document.querySelectorAll('.btn-create-task').forEach(b => b.classList.toggle('enabled', on));
+}
+
+function openTaskModal(signalId, asin, title, sourcePage) {
+  document.getElementById('tf-signal-id').value = signalId || '';
+  document.getElementById('tf-asin').value       = asin || '';
+  document.getElementById('tf-source').value     = sourcePage || 'signals';
+  document.getElementById('tf-title').value      = title ? 'Review: ' + title : 'Review signal';
+  document.getElementById('tf-due').value        = '';
+  document.getElementById('tf-notes').value      = '';
+  document.getElementById('tf-assignee').value   = '';
+  document.getElementById('tf-priority').value   = '2';
+  document.getElementById('task-modal-msg').innerHTML = '';
+  const isCreate = _liveModeActive;
+  const modeInd  = document.getElementById('modal-mode-indicator');
+  const btn      = document.getElementById('tf-submit');
+  const scope    = document.getElementById('modal-action-scope');
+  if (isCreate) {
+    modeInd.textContent = 'LIVE — CREATES CLICKUP TASK';
+    modeInd.className   = 'create-mode';
+    btn.textContent     = 'Create ClickUp Task';
+    scope.innerHTML     = '<span class="scope-yes">✅ What WILL happen: </span>One ClickUp task will be created.<br>' +
+      '<span class="scope-no">❌ Will NOT happen: </span>' +
+      'This creates a ClickUp task only. No BigQuery, Ads, Seller Central, or OpenClaw action.';
+    document.getElementById('task-modal-msg').innerHTML =
+      '<div style="font-size:11px;color:#e05a00;margin-bottom:4px;">⚠️ Live Mode — this will create a real ClickUp task.</div>';
+  } else {
+    modeInd.textContent = 'PREVIEW ONLY';
+    modeInd.className   = 'preview-mode';
+    btn.textContent     = 'Preview Task';
+    scope.innerHTML     = '<span class="scope-yes">✅ What will happen: </span>Preview only — no task created.<br>' +
+      '<span class="scope-no">❌ Will NOT happen: </span>No BigQuery, Ads, Seller Central, or OpenClaw action.';
+  }
+  btn.disabled = false;
+  document.getElementById('task-modal-overlay').style.display = 'flex';
+}
+
+async function submitTask(e) {
+  e.preventDefault();
+  const msgEl    = document.getElementById('task-modal-msg');
+  const btn      = document.getElementById('tf-submit');
+  const isCreate = _liveModeActive;
+  msgEl.innerHTML = '';
+  btn.disabled    = true;
+  btn.textContent = 'Submitting...';
+
+  // Build base payload (unchanged fields — backward compatible)
+  const payload = {
+    title:       document.getElementById('tf-title').value.trim(),
+    assignee_id: document.getElementById('tf-assignee').value,
+    priority:    parseInt(document.getElementById('tf-priority').value, 10),
+    source_page: document.getElementById('tf-source').value,
+    signal_id:   document.getElementById('tf-signal-id').value || undefined,
+    asin:        document.getElementById('tf-asin').value || undefined,
+    due_date:    document.getElementById('tf-due').value || undefined,
+    notes:       document.getElementById('tf-notes').value.trim() || undefined
+  };
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+  // Phase 2A: add mode=create fields (only when live mode is active)
+  if (isCreate) {
+    payload.mode          = 'create';
+    payload.confirmed     = true;
+    payload.live_mode_ack = true;
+    payload.actor         = 'farid';
+  }
+  // mode=preview is the default (omitted → server treats as preview)
+
+  try {
+    const resp = await fetch('/hooks/task-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+
+    // ── Preview / dry_run response (unchanged behavior) ──────────
+    if (resp.status === 200 && (data.status === 'dry_run_preview' || data.status === 'preview')) {
+      msgEl.innerHTML = '<div class="modal-success">✅ Preview only — no ClickUp task created.</div>';
+      if (data.preview) {
+        msgEl.innerHTML += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);background:var(--bg);padding:8px;border-radius:6px;"><pre style="white-space:pre-wrap;margin:0;">' + JSON.stringify(data.preview, null, 2) + '</pre></div>';
+      }
+      btn.textContent = 'Done';
+      setTimeout(function() { closeTaskModal(); }, 3500);
+
+    // ── Create disabled ───────────────────────────────────────────
+    } else if (resp.status === 200 && data.status === 'create_disabled') {
+      msgEl.innerHTML = '<div class="modal-error">Create mode is not yet enabled on this server. Contact admin.</div>';
+      btn.disabled    = false;
+      btn.textContent = 'Create ClickUp Task';
+
+    // ── Task created (Stage 2+) ───────────────────────────────────
+    } else if (resp.status === 200 && data.status === 'created') {
+      const url = data.task_url ? `<a href="${data.task_url}" target="_blank" style="color:var(--accent);">View in ClickUp ↗</a>` : '';
+      msgEl.innerHTML = `<div class="modal-success">✅ ClickUp task created. ${url}</div>` +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Note: signal_inbox not updated yet (Phase 2B).</div>';
+      btn.textContent = 'Done';
+      setTimeout(function() { closeTaskModal(); }, 4500);
+
+    // ── Duplicate ─────────────────────────────────────────────────
+    } else if (resp.status === 409 || (resp.status === 200 && data.status === 'duplicate')) {
+      const url = data.task_url ? ` <a href="${data.task_url}" target="_blank" style="color:var(--accent);">View task ↗</a>` : '';
+      msgEl.innerHTML = '<div class="modal-error">Duplicate — task already exists for this signal.' + url + '</div>';
+      btn.disabled    = false;
+      btn.textContent = isCreate ? 'Create ClickUp Task' : 'Preview Task';
+
+    // ── Rate limit ────────────────────────────────────────────────
+    } else if (resp.status === 429) {
+      msgEl.innerHTML = '<div class="modal-error">Rate limited. Wait a moment and try again.</div>';
+      btn.disabled    = false;
+      btn.textContent = isCreate ? 'Create ClickUp Task' : 'Preview Task';
+
+    // ── Validation error ──────────────────────────────────────────
+    } else if (resp.status === 400) {
+      const errors = data.errors ? data.errors.join(', ') : (data.message || 'Validation failed');
+      msgEl.innerHTML = '<div class="modal-error">' + errors + '</div>';
+      btn.disabled    = false;
+      btn.textContent = isCreate ? 'Create ClickUp Task' : 'Preview Task';
+
+    // ── Unexpected ────────────────────────────────────────────────
+    } else {
+      const msg = data.message || data.error || 'Unexpected response';
+      msgEl.innerHTML = '<div class="modal-error">' + msg + '</div>';
+      btn.disabled    = false;
+      btn.textContent = isCreate ? 'Create ClickUp Task' : 'Preview Task';
+    }
+  } catch (err) {
+    msgEl.innerHTML = '<div class="modal-error">Network error: ' + err.message + '</div>';
+    btn.disabled    = false;
+    btn.textContent = isCreate ? 'Create ClickUp Task' : 'Preview Task';
+  }
+}
+
+// ============================================================
+//  LOAD ALL DATA FOR CURRENT PAGE
+// ============================================================
+const pageLoaders = {
+  home: async (mp) => {
+    await Promise.all([
+      loadHomeKPIs(mp),
+      loadTopProducts(mp),
+      loadInvAlerts(mp),
+      loadActionCenter(mp),
+      loadCompetitorWatch(mp)
+    ]);
+  },
+  ppc: async (mp) => {
+    await Promise.all([
+      loadPPCWaste(mp),
+      loadCampaignPerf(mp)
+    ]);
+  },
+  inventory: async (mp) => {
+    const etlBody = $('etl-body');
+    if (etlBody) { etlBody.dataset.loaded = 'false'; etlBody.classList.remove('open'); }
+    const etlToggle = $('etl-toggle');
+    if (etlToggle) etlToggle.classList.remove('open');
+    await loadInventoryRisk(mp);
+  },
+  pl: async (mp) => {
+    await loadPL(mp);
+  },
+  signals: async (mp) => {
+    await loadSignals(mp);
+  },
+  searchterms: async (mp) => {
+    await loadSearchTerms(mp);
+  },
+  scorecard: async (mp) => { await loadScorecard(mp); },
+  'profitcontrol': async (mp) => { await loadProfitControl(mp); }
+};
+
+// Track which pages have been loaded for this MP session
+let loadedPages = new Set();
+
+async function loadPage(pageId, force=false) {
+  if (!pageLoaders[pageId]) return;
+  if (!force && loadedPages.has(pageId)) return;
+  loadedPages.add(pageId);
+  try {
+    await pageLoaders[pageId](currentMP);
+  } catch(e) {
+    console.error('Page load error:', pageId, e);
+  }
+}
+
+// ============================================================
+//  NAVIGATION
+// ============================================================
+let currentPage = 'home';
+
+function switchPage(pageId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pg = document.getElementById('page-' + pageId);
+  if (pg) pg.classList.add('active');
+  const nav = document.querySelector(`.nav-item[data-page="${pageId}"]`);
+  if (nav) nav.classList.add('active');
+  currentPage = pageId;
+  loadPage(pageId);
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const pg = item.dataset.page;
+    if (pg) switchPage(pg);
+  });
+});
+
+// ============================================================
+//  MARKETPLACE SELECTOR
+// ============================================================
+document.querySelectorAll('.mp-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    currentMP = btn.dataset.mp;
+    localStorage.setItem('gm_mp', currentMP);
+    document.querySelectorAll('.mp-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Re-fetch latest dates for new marketplace, then reload
+    await fetchLatestDates(currentMP);
+    loadedPages.clear();
+    loadPage(currentPage, true);
+  });
+});
+
+// Restore saved MP
+(function restoreMP() {
+  const saved = localStorage.getItem('gm_mp');
+  if (saved) {
+    currentMP = saved;
+    document.querySelectorAll('.mp-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mp === saved);
+    });
+  }
+})();
+
+// ============================================================
+//  REFRESH
+// ============================================================
+async function doRefresh() {
+  const btn = $('refresh-btn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  loadedPages.clear();
+  try {
+    await fetchLatestDates(currentMP);
+    await loadPage(currentPage, true);
+    const now = new Date();
+    $('last-refresh').textContent = 'Refreshed ' + now.toLocaleTimeString();
+  } catch(e) {}
+  btn.classList.remove('spinning');
+  btn.disabled = false;
+}
+
+$('refresh-btn').addEventListener('click', doRefresh);
+
+// ============================================================
+//  SIDEBAR TOGGLE
+// ============================================================
+$('sidebar-toggle').addEventListener('click', () => {
+  $('sidebar').classList.toggle('collapsed');
+});
+
+// ============================================================
+//  AUTO-REFRESH
+// ============================================================
+function scheduleRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(async () => {
+    await fetchLatestDates(currentMP);
+    loadedPages.clear();
+    await loadPage(currentPage, true);
+    $('last-refresh').textContent = 'Auto-refreshed ' + new Date().toLocaleTimeString();
+  }, AUTO_REFRESH_MS);
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+(async function init() {
+  try {
+    // Fetch dynamic dates first, then load
+    await fetchLatestDates(currentMP);
+    await loadPage('home', true);
+    $('last-refresh').textContent = 'Loaded ' + new Date().toLocaleTimeString();
+    scheduleRefresh();
+  } catch(e) {
+    console.error('INIT ERROR:', e);
+    $('last-refresh').textContent = 'ERROR: ' + e.message;
+    document.title = 'ERROR: ' + e.message;
+  }
+})();
+
+// ============================================================
+//  PAGE: PROFIT CONTROL
+// ─────────────────────────────────────────────────────────────
+//  PROFIT CONTROL v0.2
+//  Source: fact_sales_asin_daily only. No joins. SELECT only.
+// ─────────────────────────────────────────────────────────────
+
+async function loadProfitControl(mp) {
+  await Promise.all([
+    loadPCKPIs(mp),
+    loadPCTable(mp),
+  ]);
+}
+
+function pcBadgeHtml(tier) {
+  const map = {
+    HIGH:      ['high',      'HIGH CONFIDENCE'],
+    MEDIUM:    ['medium',    'MEDIUM CONFIDENCE'],
+    LOW:       ['low',       'LOW CONFIDENCE'],
+    UNTRUSTED: ['untrusted', 'UNTRUSTED'],
+    NO_DATA:   ['nodata',    'NO DATA'],
+  };
+  const [cls, label] = map[tier] || ['nodata', 'NO DATA'];
+  return `<span class="pc-badge pc-badge--${cls}">${label}</span>`;
+}
+
+function pcStoreTier(r) {
+  const active    = Number(r.active_selling_rows || 0);
+  const untrusted = Number(r.untrusted_rows || 0);
+  const high      = Number(r.high_confidence_rows || 0);
+  const medium    = Number(r.medium_confidence_rows || 0);
+  const low       = Number(r.low_confidence_rows || 0);
+
+  const highPct   = active > 0 ? high / active : 0;
+  const mediumPct = active > 0 ? (high + medium) / active : 0;
+
+  if (active === 0) return 'NO_DATA';
+  if (untrusted === active) return 'UNTRUSTED';
+  if (highPct >= 0.8 && untrusted === 0) return 'HIGH';
+  if (mediumPct >= 0.5) return 'MEDIUM';
+  if (low > 0) return 'LOW';
+  return 'UNTRUSTED';
+}
+
+async function loadPCKPIs(mp) {
+  const sql = `
+    SELECT
+      ROUND(SUM(revenue), 2)                                            AS revenue,
+      SUM(units_sold)                                                   AS units_sold,
+      ROUND(SUM(total_cogs), 2)                                         AS total_cogs,
+      ROUND(SUM(gross_profit), 2)                                       AS gross_profit,
+      ROUND(SUM(total_ad_spend), 2)                                     AS total_ad_spend,
+      ROUND(ABS(SUM(total_amazon_fees)), 2)                             AS total_amazon_fees,
+      ROUND(SUM(refund_principal), 2)                                   AS refund_principal,
+      ROUND(SUM(net_profit), 2)                                         AS net_profit,
+      ROUND(SAFE_DIVIDE(SUM(net_profit), SUM(revenue)) * 100, 1)       AS net_margin_pct,
+      ROUND(SAFE_DIVIDE(SUM(total_ad_spend), SUM(revenue)) * 100, 1)   AS tacos_pct,
+      COUNTIF(total_cogs > 0)                                           AS rows_with_cogs,
+      COUNTIF(total_amazon_fees != 0)                                   AS rows_with_fees,
+      COUNT(*)                                                          AS total_rows,
+      COUNTIF(fee_source = 'settlement')                                AS rows_fee_settlement,
+      COUNTIF(fee_source = 'calculated')                                AS rows_fee_calculated,
+      COUNTIF(fee_source = 'none')                                      AS rows_fee_none,
+      COUNTIF(units_sold > 0)                                           AS active_selling_rows,
+      COUNTIF(total_cogs > 0 AND fee_source = 'settlement' AND total_amazon_fees != 0 AND units_sold > 0) AS high_confidence_rows,
+      COUNTIF(total_cogs > 0 AND fee_source IN ('settlement','calculated') AND units_sold > 0)            AS medium_confidence_rows,
+      COUNTIF(total_cogs = 0 AND fee_source IN ('settlement','calculated') AND units_sold > 0)            AS low_confidence_rows,
+      COUNTIF(fee_source = 'none' AND units_sold > 0)                   AS untrusted_rows,
+      ROUND(SUM(CASE WHEN fee_source = 'none' THEN revenue ELSE 0 END), 2) AS revenue_untrusted
+    FROM \`newdatonproject.DataMart_marts.fact_sales_asin_daily\`
+    WHERE store_id = ${storeFilter(mp)}
+      AND report_date BETWEEN '${DATA_DATE_7D}' AND '${LATEST_DATA_DATE}'
+  `;
+
+  let res;
+  try {
+    res = await bqQuery(sql);
+  } catch (e) {
+    $('pc-kpi-row').innerHTML = errPanel('KPI load failed', e.message);
+    return;
+  }
+
+  const rows = res?.rows ?? res;
+  if (!rows || rows.length === 0) {
+    $('pc-kpi-row').innerHTML = errPanel('No data', 'No rows returned for KPI query.');
+    return;
+  }
+
+  const r   = rows[0];
+  const sym = fmt.mpSym(mp);
+
+  // Cast all BQ numeric values
+  const revenue          = Number(r.revenue);
+  const units_sold       = Number(r.units_sold);
+  const gross_profit     = Number(r.gross_profit);
+  const total_ad_spend   = Number(r.total_ad_spend);
+  const total_amazon_fees = Number(r.total_amazon_fees);
+  const refund_principal = Number(r.refund_principal);
+  const net_profit       = Number(r.net_profit);
+  const net_margin_pct   = Number(r.net_margin_pct);
+  const tacos_pct        = Number(r.tacos_pct);
+  const rows_with_cogs   = Number(r.rows_with_cogs);
+  const rows_with_fees   = Number(r.rows_with_fees);
+  const total_rows       = Number(r.total_rows);
+
+  // COGS warn bar
+  const cogsCoverage = total_rows > 0 ? rows_with_cogs / total_rows : 0;
+  const cogsWarn = $('pc-warn-cogs');
+  if (cogsCoverage < 0.5) {
+    $('pc-cogs-coverage-label').textContent =
+      `${rows_with_cogs} / ${total_rows} (${fmt.pct(cogsCoverage * 100)})`;
+    cogsWarn.style.display = '';
+  } else {
+    cogsWarn.style.display = 'none';
+  }
+
+  // Fees warn bar
+  $('pc-warn-fees').style.display = (rows_with_fees === 0) ? '' : 'none';
+
+  // KPI cards
+  $('pc-kpi-revenue').textContent   = fmt.currency(revenue, sym);
+  $('pc-kpi-units').textContent     = fmt.num(units_sold);
+  $('pc-kpi-gp').textContent        = fmt.currency(gross_profit, sym);
+  $('pc-kpi-adspend').textContent   = fmt.currency(total_ad_spend, sym);
+  $('pc-kpi-tacos').textContent     = fmt.pct(tacos_pct);
+  $('pc-kpi-netprofit').textContent = fmt.currency(net_profit, sym);
+  $('pc-kpi-netmargin').textContent = fmt.pct(net_margin_pct);
+
+  // Refunds: show ABS when non-zero, otherwise "—"
+  $('pc-kpi-refunds').textContent = (refund_principal !== 0)
+    ? fmt.currency(Math.abs(refund_principal), sym)
+    : '—';
+
+  // ── Store-level confidence badge ──────────────────────────────────────────
+  const storeTier    = pcStoreTier(r);
+  const badgeEl      = $('pc-confidence-badge');
+  const revUntrusted = Number(r.revenue_untrusted);
+  const revTotal     = Number(r.revenue);
+  const untrustedPct = revTotal > 0 ? Math.round(revUntrusted / revTotal * 100) : 0;
+  const feeNoneCount = Number(r.rows_fee_none);
+  const activeCount  = Number(r.active_selling_rows);
+
+  let detailText = '';
+  if (storeTier === 'UNTRUSTED') {
+    detailText = `Fee source unavailable for all ${activeCount} active rows · ${untrustedPct}% of revenue unvalidated`;
+  } else if (feeNoneCount > 0) {
+    detailText = revUntrusted === 0
+      ? `Fee source missing on inactive rows only · 0% revenue impact`
+      : `${feeNoneCount} rows with no fee source · ${untrustedPct}% of revenue unvalidated`;
+  } else if (storeTier === 'HIGH') {
+    detailText = `COGS + actual fees confirmed · ${Number(r.high_confidence_rows)} active rows`;
+  } else if (storeTier === 'MEDIUM') {
+    detailText = `Fees partial or estimated · ${Number(r.medium_confidence_rows)} rows`;
+  } else if (storeTier === 'LOW') {
+    detailText = `COGS missing for selling rows · ${Number(r.low_confidence_rows)} rows`;
+  }
+
+  badgeEl.innerHTML = `
+    <span class="pcb-label">Store data confidence:</span>
+    ${pcBadgeHtml(storeTier)}
+    <span class="pcb-detail">${detailText}</span>
+  `;
+  badgeEl.style.display = 'flex';
+}
+
+async function loadPCTable(mp) {
+  const sql = `
+    SELECT
+      asin,
+      brand,
+      ROUND(SUM(revenue), 2)                                                   AS revenue,
+      SUM(units_sold)                                                          AS units_sold,
+      ROUND(SUM(total_cogs), 2)                                                AS total_cogs,
+      ROUND(SUM(gross_profit), 2)                                              AS gross_profit,
+      ROUND(SUM(total_ad_spend), 2)                                            AS total_ad_spend,
+      ROUND(ABS(SUM(total_amazon_fees)), 2)                                    AS total_amazon_fees,
+      ROUND(SUM(refund_principal), 2)                                          AS refund_principal,
+      ROUND(SUM(net_profit), 2)                                                AS net_profit,
+      ROUND(SAFE_DIVIDE(SUM(net_profit), SUM(revenue)) * 100, 1)              AS net_margin_pct,
+      ROUND(SAFE_DIVIDE(SUM(total_ad_spend), SUM(revenue)) * 100, 1)          AS tacos_pct,
+      ROUND(SAFE_DIVIDE(ABS(SUM(total_amazon_fees)), SUM(revenue)) * 100, 1)  AS fee_rate_pct,
+      COUNTIF(total_cogs > 0)                                                  AS rows_with_cogs,
+      COUNTIF(total_amazon_fees != 0)                                          AS rows_with_fees,
+      COUNT(*)                                                                 AS total_rows,
+      ANY_VALUE(fee_source)                                                    AS fee_source,
+      CASE
+        WHEN COUNTIF(fee_source = 'none') = COUNT(*) THEN 'UNTRUSTED'
+        WHEN SUM(units_sold) = 0 THEN 'NO_DATA'
+        WHEN COUNTIF(total_cogs > 0 AND fee_source = 'settlement' AND total_amazon_fees != 0 AND units_sold > 0) > 0
+             AND COUNTIF(fee_source = 'none') = 0 THEN 'HIGH'
+        WHEN COUNTIF(total_cogs > 0 AND fee_source IN ('settlement','calculated') AND units_sold > 0) > 0 THEN 'MEDIUM'
+        WHEN COUNTIF(total_cogs = 0 AND fee_source IN ('settlement','calculated') AND units_sold > 0) > 0 THEN 'LOW'
+        ELSE 'NO_DATA'
+      END                                                                      AS profit_confidence_tier
+    FROM \`newdatonproject.DataMart_marts.fact_sales_asin_daily\`
+    WHERE store_id = ${storeFilter(mp)}
+      AND report_date BETWEEN '${DATA_DATE_7D}' AND '${LATEST_DATA_DATE}'
+    GROUP BY asin, brand
+    HAVING revenue > 0
+    ORDER BY net_profit ASC
+    LIMIT 200
+  `;
+
+  let res;
+  try {
+    res = await bqQuery(sql);
+  } catch (e) {
+    ['pc-tbody-worst', 'pc-tbody-negmargin', 'pc-tbody-fees'].forEach(id => {
+      $(id).innerHTML =
+        `<tr><td colspan="12">${errPanel('Load failed', e.message)}</td></tr>`;
+    });
+    return;
+  }
+
+  const rows = res?.rows ?? res ?? [];
+  const sym  = fmt.mpSym(mp);
+
+  // ── Worst 25 (already sorted ASC by net_profit → first 25 are worst) ──────
+  const worst25 = rows.slice(0, 25);
+  if (worst25.length === 0) {
+    $('pc-tbody-worst').innerHTML =
+      '<tr><td colspan="12" class="pc-missing">No data</td></tr>';
+  } else {
+    $('pc-tbody-worst').innerHTML = worst25.map(r => {
+      const net_profit     = Number(r.net_profit);
+      const net_margin_pct = Number(r.net_margin_pct);
+      const revenue        = Number(r.revenue);
+      const units_sold     = Number(r.units_sold);
+      const gross_profit   = Number(r.gross_profit);
+      const total_ad_spend = Number(r.total_ad_spend);
+      const tacos_pct      = Number(r.tacos_pct);
+      const rows_with_cogs = Number(r.rows_with_cogs);
+      const total_rows     = Number(r.total_rows);
+
+      const npCls    = net_profit < 0     ? ' class="pc-neg"' : '';
+      const nmCls    = net_margin_pct < 0 ? ' class="pc-neg"' : '';
+      const cogsNote = rows_with_cogs === 0
+        ? '<span class="pc-missing">no COGS</span>'
+        : `${rows_with_cogs}/${total_rows}`;
+      const tierRaw = r.profit_confidence_tier || 'NO_DATA';
+      const tier = pcAdjustTier(tierRaw, r.fee_source || '', rows_with_cogs, total_rows, revenue);
+      const wIssue = net_profit < 0 ? 'NEGATIVE_MARGIN' : (tacos_pct > 40 ? 'HIGH_TACOS' : 'NEGATIVE_MARGIN');
+      const wBtnCls = net_profit < 0 ? ' pc-task-btn--urgent' : (tacos_pct > 40 ? ' pc-task-btn--amber' : '');
+      const wRow = { asin: r.asin, brand: r.brand || '', store_id: pcStoreId(mp), marketplace: mp,
+        issue_type: wIssue, confidence_tier: tier,
+        revenue: r.revenue, net_profit: r.net_profit,
+        net_margin_pct: r.net_margin_pct, tacos_pct: r.tacos_pct };
+      const wEnc = encodeURIComponent(JSON.stringify(wRow));
+      return `<tr>
+        <td>${pcBadgeHtml(tier)}</td>
+        <td>${r.asin}</td>
+        <td>${r.brand ?? '—'}</td>
+        <td>${fmt.currency(revenue, sym)}</td>
+        <td>${fmt.num(units_sold)}</td>
+        <td>${fmt.currency(gross_profit, sym)}</td>
+        <td>${fmt.currency(total_ad_spend, sym)}</td>
+        <td>${fmt.pct(tacos_pct)}</td>
+        <td${npCls}>${fmt.currency(net_profit, sym)}</td>
+        <td${nmCls}>${fmt.pct(net_margin_pct)}</td>
+        <td>${cogsNote}</td>
+        <td><button class="pc-task-btn${wBtnCls}"
+            onclick="pcOpenTaskModal(JSON.parse(decodeURIComponent(this.dataset.row)))"
+            data-row="${wEnc}">+ Task</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Negative margin (net_profit < 0, from the 200 returned) ───────────────
+  const negMargin = rows.filter(r => Number(r.net_profit) < 0);
+  if (negMargin.length === 0) {
+    $('pc-tbody-negmargin').innerHTML =
+      '<tr><td colspan="9" class="pc-missing">No negative-margin ASINs in period</td></tr>';
+  } else {
+    $('pc-tbody-negmargin').innerHTML = negMargin.map(r => {
+      const net_profit     = Number(r.net_profit);
+      const net_margin_pct = Number(r.net_margin_pct);
+      const revenue        = Number(r.revenue);
+      const units_sold     = Number(r.units_sold);
+      const tacos_pct      = Number(r.tacos_pct);
+      const negTierRaw = r.profit_confidence_tier || 'NO_DATA';
+      const negTier = pcAdjustTier(negTierRaw, r.fee_source || '', Number(r.rows_with_cogs), Number(r.total_rows), revenue);
+      const nRow = { asin: r.asin, brand: r.brand || '', store_id: pcStoreId(mp), marketplace: mp,
+        issue_type: 'NEGATIVE_MARGIN', confidence_tier: negTier,
+        revenue: r.revenue, net_profit: r.net_profit,
+        net_margin_pct: r.net_margin_pct, tacos_pct: r.tacos_pct };
+      const nEnc = encodeURIComponent(JSON.stringify(nRow));
+      return `<tr>
+        <td>${pcBadgeHtml(negTier)}</td>
+        <td>${r.asin}</td>
+        <td>${r.brand ?? '—'}</td>
+        <td>${fmt.currency(revenue, sym)}</td>
+        <td>${fmt.num(units_sold)}</td>
+        <td class="pc-neg">${fmt.currency(net_profit, sym)}</td>
+        <td class="pc-neg">${fmt.pct(net_margin_pct)}</td>
+        <td>${fmt.pct(tacos_pct)}</td>
+        <td><button class="pc-task-btn pc-task-btn--urgent"
+            onclick="pcOpenTaskModal(JSON.parse(decodeURIComponent(this.dataset.row)))"
+            data-row="${nEnc}">+ Task</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Fee pressure: rows where fees > 0, sorted by fee_rate_pct DESC ────────
+  const feePressure = rows
+    .filter(r => Number(r.total_amazon_fees) > 0)
+    .sort((a, b) => Number(b.fee_rate_pct) - Number(a.fee_rate_pct));
+
+  if (feePressure.length === 0) {
+    $('pc-tbody-fees').innerHTML =
+      '<tr><td colspan="9" class="pc-missing">No fee data for this store/period</td></tr>';
+  } else {
+    $('pc-tbody-fees').innerHTML = feePressure.map(r => {
+      const revenue           = Number(r.revenue);
+      const total_amazon_fees = Number(r.total_amazon_fees);
+      const fee_rate_pct      = Number(r.fee_rate_pct);
+      const total_ad_spend    = Number(r.total_ad_spend);
+      const net_profit        = Number(r.net_profit);
+      const feesTierRaw = r.profit_confidence_tier || 'NO_DATA';
+      const feesTier = pcAdjustTier(feesTierRaw, r.fee_source || '', Number(r.rows_with_cogs), Number(r.total_rows), revenue);
+      const fBtnCls = fee_rate_pct > 50 ? ' pc-task-btn--urgent' : ' pc-task-btn--amber';
+      const fRow = { asin: r.asin, brand: r.brand || '', store_id: pcStoreId(mp), marketplace: mp,
+        issue_type: 'FEE_PRESSURE', confidence_tier: feesTier,
+        revenue: r.revenue, net_profit: r.net_profit,
+        fee_rate_pct: r.fee_rate_pct, total_amazon_fees: r.total_amazon_fees };
+      const fEnc = encodeURIComponent(JSON.stringify(fRow));
+      return `<tr>
+        <td>${pcBadgeHtml(feesTier)}</td>
+        <td>${r.asin}</td>
+        <td>${r.brand ?? '—'}</td>
+        <td>${fmt.currency(revenue, sym)}</td>
+        <td>${fmt.currency(total_amazon_fees, sym)}</td>
+        <td>${fmt.pct(fee_rate_pct)}</td>
+        <td>${fmt.currency(total_ad_spend, sym)}</td>
+        <td>${fmt.currency(net_profit, sym)}</td>
+        <td><button class="pc-task-btn${fBtnCls}"
+            onclick="pcOpenTaskModal(JSON.parse(decodeURIComponent(this.dataset.row)))"
+            data-row="${fEnc}">+ Task</button></td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+//  PROFIT CONTROL — COGS COVERAGE TIER ADJUSTER
+// ─────────────────────────────────────────────────────────────
+// Adjusts SQL-computed tier downward when COGS coverage is poor.
+// UNTRUSTED/NO_DATA are never upgraded or changed.
+// Only applies to revenue-bearing rows (revenue > 0).
+function pcAdjustTier(tier, feeSource, rowsWithCogs, totalRows, revenue) {
+  if (feeSource === 'none' || tier === 'UNTRUSTED' || tier === 'NO_DATA') return tier;
+  if (Number(revenue) <= 0) return tier;
+  const cov = totalRows > 0 ? rowsWithCogs / totalRows : 0;
+  if (cov < 0.25) return 'LOW';
+  if (cov < 0.75) return 'MEDIUM';
+  return tier;
+}
+// ─────────────────────────────────────────────────────────────
+//  PROFIT CONTROL — MANUAL TASK CREATION  (Stage A: preview)
+// ─────────────────────────────────────────────────────────────
+
+// pcStoreId: extract clean store_id string from storeFilter (strips SQL quotes)
+function pcStoreId(mp) { return storeFilter(mp).replace(/'/g, ''); }
+
+const PC_ISSUE_DEFAULTS = {
+  NEGATIVE_MARGIN: { priority: 2, due_hours: 48, label: 'Negative margin ASIN' },
+  HIGH_TACOS:      { priority: 2, due_hours: 48, label: 'High TACoS ASIN' },
+  MISSING_COGS:    { priority: 3, due_hours: 72, label: 'Missing COGS — unit cost needed' },
+  FEES_MISSING:    { priority: 2, due_hours: 48, label: 'Fee pipeline missing (UNTRUSTED)' },
+  FEE_PRESSURE:    { priority: 3, due_hours: 72, label: 'High fee rate' },
+};
+
+let _pcRow      = null;
+let _pcPreviewed = false;
+
+function pcOpenTaskModal(row) {
+  // Remap issue_type from confidence when row is from a generic table
+  if (row.confidence_tier === 'UNTRUSTED' && row.issue_type === 'NEGATIVE_MARGIN')
+    row.issue_type = 'FEES_MISSING';
+  else if (row.confidence_tier === 'LOW' && row.issue_type === 'NEGATIVE_MARGIN')
+    row.issue_type = 'MISSING_COGS';
+
+  const def = PC_ISSUE_DEFAULTS[row.issue_type] || PC_ISSUE_DEFAULTS.NEGATIVE_MARGIN;
+  _pcRow      = row;
+  _pcPreviewed = false;
+
+  $('pc-tf-title').value    = `[Profit Control] ${def.label} — ${row.asin} (${row.store_id})`;
+  $('pc-tf-assignee').value = '113413890';
+  $('pc-tf-priority').value = String(def.priority);
+  $('pc-tf-due').value      = String(def.due_hours);
+  $('pc-tf-notes').value    = '';
+
+  $('pc-modal-preview-box').style.display = 'none';
+  $('pc-modal-preview-box').innerHTML     = '';
+  $('pc-task-modal-msg').textContent      = '';
+  $('pc-task-modal-msg').className        = '';
+  $('pc-modal-mode-badge').textContent    = 'PREVIEW ONLY';
+  $('pc-modal-mode-badge').className      = 'pc-modal-mode-badge';
+  // Reset Create button
+  const createBtn = $('pc-btn-create');
+  if (createBtn) { createBtn.classList.remove('ready'); createBtn.disabled = false; createBtn.textContent = '✓ Create Task'; }
+  $('pc-btn-preview').disabled = false;
+
+  $('pc-task-modal-overlay').classList.add('open');
+}
+
+function pcCloseModal(evt, force) {
+  if (!force && evt && evt.target !== $('pc-task-modal-overlay')) return;
+  $('pc-task-modal-overlay').classList.remove('open');
+  _pcRow       = null;
+  _pcPreviewed = false;
+}
+
+function pcBuildDescription(row, sym) {
+  const lines = [
+    `ASIN ${row.asin} (${row.brand || '—'}) | Store: ${row.store_id} | Last 7 days`,
+    '',
+    `Issue type:      ${row.issue_type}`,
+    `Confidence:      ${row.confidence_tier}`,
+    '',
+  ];
+  if (row.revenue        != null) lines.push(`Revenue:         ${fmt.currency(Number(row.revenue), sym)}`);
+  if (row.net_profit     != null) lines.push(`Est. Net Profit: ${fmt.currency(Number(row.net_profit), sym)}`);
+  if (row.net_margin_pct != null) lines.push(`Est. Net Margin: ${fmt.pct(Number(row.net_margin_pct))}`);
+  if (row.tacos_pct      != null) lines.push(`TACoS:           ${fmt.pct(Number(row.tacos_pct))}`);
+  if (row.fee_rate_pct   != null) lines.push(`Fee Rate:        ${fmt.pct(Number(row.fee_rate_pct))}`);
+  lines.push('');
+  lines.push(`Raised via GM Dashboard — Profit Control — ${new Date().toISOString().slice(0,10)}`);
+  return lines.join('\n');
+}
+
+async function pcSubmitPreview() {
+  if (!_pcRow) return;
+  const btn = $('pc-btn-preview');
+  btn.disabled    = true;
+  btn.textContent = 'Previewing…';
+  pcShowMsg('', '');
+
+  const title    = $('pc-tf-title').value.trim();
+  const assignee = $('pc-tf-assignee').value;
+
+  if (!title)    { btn.disabled = false; btn.textContent = 'Preview Task'; return pcShowMsg('Task title is required.', 'err'); }
+  if (!assignee) { btn.disabled = false; btn.textContent = 'Preview Task'; return pcShowMsg('Please select an assignee.', 'err'); }
+
+  const sym     = fmt.mpSym(_pcRow.marketplace);
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+  // actor intentionally omitted — must not come from browser payload
+  const payload = {
+    client_request_id:    `pc-${_pcRow.asin}-${_pcRow.store_id}-${_pcRow.issue_type}-${dateStr}`,
+    source_page:          'profit_control',
+    issue_type:           _pcRow.issue_type,
+    store_id:             _pcRow.store_id,
+    marketplace:          _pcRow.marketplace,
+    asin:                 _pcRow.asin,
+    brand:                _pcRow.brand || '',
+    confidence_tier:      _pcRow.confidence_tier || 'UNKNOWN',
+    title:                title,
+    description:          pcBuildDescription(_pcRow, sym),
+    notes:                $('pc-tf-notes').value.trim(),
+    assignee_id:          assignee,
+    priority:             Number($('pc-tf-priority').value),
+    due_hours:            Number($('pc-tf-due').value),
+    mode:                 'preview',
+    confirmed:            false,
+  };
+
+  try {
+    const res  = await fetch('/hooks/task-create', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+    const preview = data.preview || {};
+    const box = $('pc-modal-preview-box');
+    box.innerHTML =
+      `<strong>Preview (not created)</strong>
+
+` +
+      `Title:       ${pcEsc(preview.title || title)}
+` +
+      `Issue type:  ${pcEsc(_pcRow.issue_type)}
+` +
+      `Store:       ${pcEsc(_pcRow.store_id)}
+` +
+      `ASIN:        ${pcEsc(_pcRow.asin)}
+` +
+      `Confidence:  ${pcEsc(_pcRow.confidence_tier)}
+` +
+      `Assignee:    ${pcEsc(preview.assignee || assignee)}
+` +
+      `Priority:    ${pcEsc(String(preview.priority || payload.priority))}
+` +
+      `Due:         ${pcEsc(payload.due_hours + 'h from now')}
+` +
+      `List:        ${pcEsc(preview.list_name || 'GM Control Tower')}
+` +
+      `Tags:        ${(preview.tags || []).map(pcEsc).join(', ')}
+` +
+      `Notes:       ${pcEsc(preview.notes_handling || ($('pc-tf-notes').value.trim() ? 'will be added as first ClickUp comment' : 'no notes — no comment will be created'))}
+` +
+      `
+✅ Ready to create in ${pcEsc(preview.list_name || 'GM Control Tower')}.`;
+    box.style.display = '';
+
+    _pcPreviewed = true;
+    $('pc-modal-mode-badge').textContent = 'PREVIEW OK';
+    pcShowMsg('Preview OK — click "Create Task" to submit.', 'ok');
+    // Enable Create button
+    const createBtn = $('pc-btn-create');
+    if (createBtn) { createBtn.classList.add('ready'); }
+
+  } catch (e) {
+    pcShowMsg('Preview failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Preview Task';
+  }
+}
+
+async function pcSubmitCreate() {
+  if (!_pcRow || !_pcPreviewed) return;
+  const btn = $('pc-btn-create');
+  btn.disabled    = true;
+  btn.textContent = 'Creating…';
+  pcShowMsg('', '');
+
+  const title    = $('pc-tf-title').value.trim();
+  const assignee = $('pc-tf-assignee').value;
+  const dueHours = Number($('pc-tf-due').value);
+
+  if (!title)    { btn.disabled = false; btn.textContent = '✓ Create Task'; return pcShowMsg('Task title is required.', 'err'); }
+  if (!assignee) { btn.disabled = false; btn.textContent = '✓ Create Task'; return pcShowMsg('Please select an assignee.', 'err'); }
+
+  // Calculate ISO due_date from due_hours
+  const dueDate = new Date(Date.now() + dueHours * 3600 * 1000).toISOString().slice(0, 10);
+
+  const payload = {
+    source_page:     'profit_control',
+    issue_type:      _pcRow.issue_type,
+    store_id:        _pcRow.store_id,
+    marketplace:     _pcRow.marketplace,
+    asin:            _pcRow.asin,
+    brand:           _pcRow.brand || '',
+    confidence_tier: _pcRow.confidence_tier || 'UNKNOWN',
+    title:           title,
+    description:     pcBuildDescription(_pcRow, fmt.mpSym(_pcRow.marketplace)),
+    notes:           $('pc-tf-notes').value.trim(),
+    assignee_id:     assignee,
+    priority:        Number($('pc-tf-priority').value),
+    due_date:        dueDate,
+    mode:            'create',
+    confirmed:       true,
+  };
+
+  try {
+    const res  = await fetch('/hooks/task-create', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (res.status === 409) {
+      // Duplicate
+      const url = data.existing_task_url || '';
+      const box = $('pc-modal-preview-box');
+      box.innerHTML = `<strong>⚠️ Already exists</strong>\n\nA task for this ASIN + issue + store was already submitted.\n` +
+        (url ? `ClickUp: <a href="${pcEsc(url)}" target="_blank" rel="noopener" style="color:#60a5fa;">${pcEsc(url)}</a>` : '');
+      box.style.display = '';
+      pcShowMsg('Duplicate — task already exists.', 'err');
+      btn.disabled    = false;
+      btn.textContent = '✓ Create Task';
+      return;
+    }
+
+    if (!res.ok) throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+
+    // Success
+    const taskUrl = data.task_url || '';
+    const taskId  = data.task_id  || '';
+    const box = $('pc-modal-preview-box');
+    const commentLine = (data.comment_created === true)
+      ? 'Comment:  ✓ Note posted as first comment'
+      : (data.comment_created === false ? 'Comment:  — (no notes provided)' : '');
+    box.innerHTML = `<strong>✅ Task Created</strong>\n\n` +
+      `Title:    ${pcEsc(data.title || title)}\n` +
+      `Signal:   ${pcEsc(data.signal_id || '')}\n` +
+      `Assignee: ${pcEsc(data.assignee || assignee)}\n` +
+      `List:     ${pcEsc(data.list_name || 'GM Control Tower')}\n` +
+      (commentLine ? `${pcEsc(commentLine)}\n` : '') +
+      `\n` +
+      (taskUrl ? `ClickUp: <a href="${pcEsc(taskUrl)}" target="_blank" rel="noopener" style="color:#4ade80;">${pcEsc(taskUrl)}</a>` : '');
+    box.style.display = '';
+
+    $('pc-modal-mode-badge').textContent = 'CREATED';
+    pcShowMsg('✅ Task created in GM Control Tower.', 'ok');
+    btn.classList.remove('ready');
+    btn.textContent = '✓ Done';
+    // Disable preview button too — task is created
+    $('pc-btn-preview').disabled = true;
+
+  } catch (e) {
+    pcShowMsg('Create failed: ' + e.message, 'err');
+    btn.disabled    = false;
+    btn.textContent = '✓ Create Task';
+  }
+}
+
+function pcShowMsg(msg, cls) {
+  const el = $('pc-task-modal-msg');
+  el.textContent = msg;
+  el.className   = cls || '';
+}
+
+function pcEsc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+//  END PROFIT CONTROL v0.2
+// ─────────────────────────────────────────────────────────────
+</script>
+
+<!-- ========== TASK MODAL (Phase 1A preview + Phase 2A create) ========== -->
+<div id="task-modal-overlay" style="display:none;" onclick="closeTaskModal(event)">
+  <div id="task-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <strong style="font-size:14px;">Assign / Create Task</strong>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span id="modal-mode-indicator" class="preview-mode">PREVIEW ONLY</span>
+        <button onclick="closeTaskModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;line-height:1;">×</button>
+      </div>
+    </div>
+    <form onsubmit="submitTask(event)">
+      <input type="hidden" id="tf-signal-id" />
+      <input type="hidden" id="tf-asin" />
+      <input type="hidden" id="tf-source" value="signals" />
+      <label>Task Title</label>
+      <input type="text" id="tf-title" maxlength="200" required placeholder="e.g. Review HIGH_ACOS signal — B0B8P762VQ UK" />
+      <label>Assignee</label>
+      <select id="tf-assignee" required>
+        <option value="">— select —</option>
+        <option value="113413890">Farid</option>
+        <option value="78169620">Amna</option>
+        <option value="107572818">Shaheer</option>
+        <option value="11406025">Bilal</option>
+      </select>
+      <label>Priority</label>
+      <select id="tf-priority">
+        <option value="1">Urgent</option>
+        <option value="2" selected>High</option>
+        <option value="3">Normal</option>
+        <option value="4">Low</option>
+      </select>
+      <label>Due Date (optional)</label>
+      <input type="date" id="tf-due" />
+      <label>Notes (optional)</label>
+      <textarea id="tf-notes" rows="2" maxlength="1000" placeholder="Context, action items..."></textarea>
+      <div id="modal-action-scope">
+        <span class="scope-yes">✅ What will happen: </span>Preview only (no task created)<br>
+        <span class="scope-no">❌ Will NOT happen: </span>No BigQuery, Ads, Seller Central, or OpenClaw action.
+      </div>
+      <div id="task-modal-msg" style="margin-top:10px;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" onclick="closeTaskModal()">Cancel</button>
+        <button type="submit" id="tf-submit" class="btn-accent">Preview Task</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+</body>
+</html>
