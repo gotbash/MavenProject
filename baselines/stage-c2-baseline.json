@@ -1,0 +1,21 @@
+{
+  "stage": "C.2",
+  "status": "CLOSED",
+  "frozen_date": "2026-05-02",
+  "live_file": "/var/www/html/omnisec/gm-dashboard.html",
+  "backup": "/root/Omnisec/backups/stage-c2-pre-deploy-20260502-003328/gm-dashboard.html",
+  "live_line_count": 4534,
+  "live_sha256": "5e786a0b78726ab8082b985746150a24307c13dc5007b4fe30d67afceb60e1df",
+  "source_branch": "cursor/stage-c2-operator-brief-23b4",
+  "test_task": "86exf9510",
+  "audit_row": 31,
+  "routing_reason": "production_triage_single_inbox",
+  "notes_comment_only": true,
+  "tags_verified": [
+    "confidence-untrusted",
+    "fees_missing",
+    "kbrands_uk",
+    "profit-control",
+    "source-dashboard"
+  ]
+}
