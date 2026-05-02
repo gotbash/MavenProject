@@ -4102,22 +4102,166 @@ function pcMarkPreviewDirty() {
   pcShowMsg('Fields changed — please preview again before creating.', 'err');
 }
 
-function pcBuildDescription(row, sym) {
-  const lines = [
-    `ASIN ${row.asin} (${row.brand || '—'}) | Store: ${row.store_id} | Last 7 days`,
-    '',
-    `Issue type:      ${row.issue_type}`,
-    `Confidence:      ${row.confidence_tier}`,
-    '',
+function pcIssueBrief(row, sym) {
+  const issueType = row.issue_type || 'NEGATIVE_MARGIN';
+  const confidence = row.confidence_tier || 'UNKNOWN';
+  const money = v => (v == null || v === '') ? 'n/a' : fmt.currency(Number(v), sym);
+  const pct = v => (v == null || v === '') ? 'n/a' : fmt.pct(Number(v));
+  const val = v => (v == null || v === '') ? 'n/a' : String(v);
+
+  const metrics = [
+    `- Revenue: ${money(row.revenue)}`,
+    `- Estimated net profit: ${money(row.net_profit)}`,
+    `- Estimated net margin: ${pct(row.net_margin_pct)}`,
+    `- TACoS: ${pct(row.tacos_pct)}`,
+    `- Fee rate: ${pct(row.fee_rate_pct)}`,
+    `- Confidence tier: ${confidence}`,
+    `- Marketplace: ${val(row.marketplace)}`,
+    `- Store: ${val(row.store_id)}`,
   ];
-  if (row.revenue        != null) lines.push(`Revenue:         ${fmt.currency(Number(row.revenue), sym)}`);
-  if (row.net_profit     != null) lines.push(`Est. Net Profit: ${fmt.currency(Number(row.net_profit), sym)}`);
-  if (row.net_margin_pct != null) lines.push(`Est. Net Margin: ${fmt.pct(Number(row.net_margin_pct))}`);
-  if (row.tacos_pct      != null) lines.push(`TACoS:           ${fmt.pct(Number(row.tacos_pct))}`);
-  if (row.fee_rate_pct   != null) lines.push(`Fee Rate:        ${fmt.pct(Number(row.fee_rate_pct))}`);
-  lines.push('');
-  lines.push(`Raised via GM Dashboard — Profit Control — ${new Date().toISOString().slice(0,10)}`);
+
+  const briefs = {
+    FEES_MISSING: {
+      problem: 'Profit Control cannot verify true profitability because fee data is missing, unavailable, or marked untrusted.',
+      why: 'Missing fees can make an unprofitable ASIN look profitable, or hide fee leakage from FBA, referral, storage, return, or other marketplace charges.',
+      checks: [
+        'Confirm the ASIN had recent sales in this store.',
+        'Check whether actual marketplace fee data exists for the same period.',
+        'Compare expected fee rate with observed or estimated fee rate.',
+        'Determine whether missing fees are isolated to this ASIN or affect multiple ASINs/store rows.',
+        'If fees are missing only for inactive or zero-revenue rows, document that no operator action is needed.',
+        'If fees are missing for revenue-generating rows, identify the likely data-source or pipeline coverage issue.',
+      ],
+      escalation: 'Escalate to Data Ops / Finance Ops if fee data is missing for active revenue rows or multiple ASINs in the same store.',
+      dont: [
+        'Do not change product pricing based only on estimated fee data.',
+        'Do not close without confirming whether actual fee data exists.',
+        'Do not manually edit BigQuery or fee pipeline data from this task.',
+      ],
+    },
+    MISSING_COGS: {
+      problem: 'Profit Control cannot calculate reliable net margin because unit cost / COGS is missing or incomplete for this ASIN.',
+      why: 'Without COGS, margin and profit estimates may be materially wrong, causing missed loss-making SKUs or unnecessary action on healthy SKUs.',
+      checks: [
+        'Confirm the ASIN is actively selling.',
+        'Check whether COGS exists in the approved source of truth.',
+        'Validate whether cost is missing, zero, stale, or mapped to the wrong SKU/ASIN.',
+        'If multiple child ASINs exist, verify mapping to the correct parent/SKU.',
+        'Add or request the correct unit cost through the approved cost-maintenance process.',
+        'Recheck expected margin after COGS is available.',
+      ],
+      escalation: 'Escalate to Finance Ops / Catalog Ops if cost cannot be confirmed or multiple ASINs in the same brand/store are missing COGS.',
+      dont: [
+        'Do not guess COGS.',
+        'Do not use temporary estimates as final cost.',
+        'Do not change dashboard calculations directly.',
+        'Do not close without identifying the cost source or blocker.',
+      ],
+    },
+    NEGATIVE_MARGIN: {
+      problem: 'This ASIN appears to be generating negative estimated net margin over the last 7 days.',
+      why: 'Negative margin means each sale may reduce profit after COGS, fees, and advertising; losses can scale with sales volume.',
+      checks: [
+        'Confirm data confidence is sufficient; COGS and fees should be present or any gaps explained.',
+        'Identify whether negative margin is driven by COGS, fees, ad spend, discounting, or pricing.',
+        'Compare current selling price against target margin price.',
+        'Review recent promotions, coupons, or pricing changes.',
+        'Check whether ad spend is disproportionately high for the ASIN.',
+        'Decide whether this is temporary, data-quality related, or a genuine profit issue.',
+      ],
+      escalation: 'Escalate to GM / Commercial Ops if meaningful revenue remains negative after COGS/fees are confirmed, or if action requires pricing/ads approval.',
+      dont: [
+        'Do not change price or ads directly from this task unless separately authorized.',
+        'Do not assume negative margin is real if confidence is LOW or UNTRUSTED.',
+        'Do not close without naming the likely driver.',
+      ],
+    },
+    HIGH_TACOS: {
+      problem: 'This ASIN has elevated TACoS over the last 7 days, indicating ad spend may be consuming too much of total revenue.',
+      why: 'High TACoS can turn an otherwise profitable ASIN into a margin drag and may indicate poor ad efficiency, aggressive scaling, low organic conversion, or listing/pricing issues.',
+      checks: [
+        'Confirm the TACoS threshold breach and revenue level.',
+        'Check whether high TACoS is temporary due to launch, promo, or ranking push.',
+        'Review whether ad spend is concentrated in one campaign or target group.',
+        'Compare TACoS against margin capacity.',
+        'Check whether listing, price, or conversion weakness may be causing inefficient spend.',
+        'Recommend whether to reduce spend, refine targeting, pause inefficient campaigns, or accept temporarily for strategic reasons.',
+      ],
+      escalation: 'Escalate to Ads / Growth Ops if TACoS materially exceeds margin capacity; escalate to GM if spend is strategic and loss-making.',
+      dont: [
+        'Do not pause or edit campaigns directly from this task unless separately authorized.',
+        'Do not evaluate TACoS without checking margin capacity.',
+        'Do not close as "ads issue" without specifying the driver.',
+      ],
+    },
+    FEE_PRESSURE: {
+      problem: 'This ASIN has an unusually high fee rate relative to revenue, suggesting marketplace fees may be compressing margin.',
+      why: 'High fee pressure can indicate FBA fee changes, referral category mismatch, storage/return costs, dimensional weight issues, or other fee leakage.',
+      checks: [
+        'Confirm fee data is actual/trusted, not estimated.',
+        'Compare fee rate against expected category and fulfillment model.',
+        'Check for abnormal FBA, referral, storage, return, or adjustment fees.',
+        'Verify product dimensions/weight and marketplace category if relevant.',
+        'Determine whether fee pressure is temporary or structural.',
+        'Recommend fee audit, catalog correction, fulfillment review, pricing review, or margin exception.',
+      ],
+      escalation: 'Escalate to Finance Ops / Catalog Ops if fee rate appears incorrect or category/dimension-related; escalate to GM if high fees are real and require a commercial decision.',
+      dont: [
+        'Do not assume high fees are wrong without checking source confidence.',
+        'Do not change catalog/category/fulfillment settings from this task directly.',
+        'Do not close without identifying whether fee pressure is real or data-related.',
+      ],
+    },
+  };
+
+  const brief = briefs[issueType] || briefs.NEGATIVE_MARGIN;
+  const lines = [
+    'Profit Control Brief',
+    '',
+    `ASIN: ${val(row.asin)}`,
+    `Brand: ${val(row.brand)}`,
+    `Store: ${val(row.store_id)}`,
+    `Marketplace: ${val(row.marketplace)}`,
+    `Issue Type: ${issueType}`,
+    `Confidence: ${confidence}`,
+    'Period: Last 7 days',
+    '',
+    'Problem',
+    brief.problem,
+    '',
+    'Why This Matters',
+    brief.why,
+    '',
+    'Metrics To Review',
+    ...metrics,
+    '',
+    'Step-by-Step Checks',
+    ...brief.checks.map((item, idx) => `${idx + 1}. ${item}`),
+    '',
+    'Expected Output',
+    'Finding:',
+    'Root cause:',
+    'Action taken / requested:',
+    'Owner:',
+    'Next step:',
+    'Can this row be trusted? Yes / No / Partial',
+    '',
+    'Escalation Rule',
+    brief.escalation,
+    '',
+    'Do Not Do',
+    ...brief.dont.map(item => `- ${item}`),
+    '- Do not change Ads, Seller Central, OpenClaw, BigQuery, or signal_inbox from this task.',
+    '- Do not append notes into this description; notes belong in the ClickUp comment created server-side.',
+    '',
+    `Raised via GM Dashboard - Profit Control - ${new Date().toISOString().slice(0,10)}`,
+  ];
+
   return lines.join('\n');
+}
+
+function pcBuildDescription(row, sym) {
+  return pcIssueBrief(row, sym);
 }
 
 async function pcSubmitPreview() {
