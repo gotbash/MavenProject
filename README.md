@@ -29,6 +29,9 @@ cp .env.example .env
 - `DEFAULT_LIMIT` (default: `200`)
 - `SOURCE_TABLE` (default: `agent_outputs.signals`)
 
+Note: values with spaces should be quoted in `.env` (for example
+`SHEET_NAME="Signal Log"`).
+
 ## Makefile commands
 
 Install deps:
