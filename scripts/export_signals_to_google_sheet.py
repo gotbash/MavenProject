@@ -50,6 +50,19 @@ SHEET_COLUMNS: List[str] = [
     "notes",
 ]
 
+RUN_LOG_COLUMNS: List[str] = [
+    "run_at",
+    "source_table",
+    "fetched_rows",
+    "new_rows",
+    "skipped_duplicates",
+    "appended_rows",
+    "dry_run",
+    "limit",
+    "status",
+    "notes",
+]
+
 ORDER_COLUMN_CANDIDATES: Sequence[str] = (
     "logged_at",
     "created_at",
@@ -129,6 +142,27 @@ def _to_bool(value: Any) -> Optional[bool]:
         if normalized in {"false", "f", "0", "no", "n"}:
             return False
     return None
+
+
+def _optional_bool_env(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+    parsed = _to_bool(raw_value)
+    if parsed is None:
+        raise ValueError(f"Invalid boolean value for {name}: {raw_value}")
+    return parsed
+
+
+def _column_letter(index_1_based: int) -> str:
+    if index_1_based < 1:
+        raise ValueError("Column index must be >= 1")
+    letters: List[str] = []
+    index = index_1_based
+    while index > 0:
+        index, remainder = divmod(index - 1, 26)
+        letters.append(chr(ord("A") + remainder))
+    return "".join(reversed(letters))
 
 
 def _is_empty_signal_source_data(row: Dict[str, Any]) -> bool:
@@ -284,8 +318,54 @@ def _sheet_service():
     return build("sheets", "v4", credentials=credentials, cache_discovery=False)
 
 
-def ensure_sheet_header(service: Any, spreadsheet_id: str, sheet_name: str) -> None:
-    header_range = f"{sheet_name}!A1:W1"
+def get_sheet_titles(service: Any, spreadsheet_id: str) -> set:
+    response = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title")
+        .execute()
+    )
+    sheets = response.get("sheets", [])
+    return {sheet["properties"]["title"] for sheet in sheets if "properties" in sheet}
+
+
+def ensure_sheet_tab(
+    service: Any,
+    spreadsheet_id: str,
+    sheet_name: str,
+    auto_create_tabs: bool,
+) -> None:
+    titles = get_sheet_titles(service, spreadsheet_id=spreadsheet_id)
+    if sheet_name in titles:
+        return
+    if not auto_create_tabs:
+        raise ValueError(
+            f"Sheet tab '{sheet_name}' does not exist and AUTO_CREATE_TABS is disabled."
+        )
+    (
+        service.spreadsheets()
+        .batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": [{"addSheet": {"properties": {"title": sheet_name}}}]},
+        )
+        .execute()
+    )
+
+
+def ensure_sheet_header(
+    service: Any,
+    spreadsheet_id: str,
+    sheet_name: str,
+    columns: Sequence[str],
+    auto_create_tabs: bool,
+) -> None:
+    ensure_sheet_tab(
+        service=service,
+        spreadsheet_id=spreadsheet_id,
+        sheet_name=sheet_name,
+        auto_create_tabs=auto_create_tabs,
+    )
+    last_col = _column_letter(len(columns))
+    header_range = f"{sheet_name}!A1:{last_col}1"
     response = (
         service.spreadsheets()
         .values()
@@ -296,7 +376,7 @@ def ensure_sheet_header(service: Any, spreadsheet_id: str, sheet_name: str) -> N
     if values and values[0]:
         return
 
-    body = {"values": [SHEET_COLUMNS]}
+    body = {"values": [list(columns)]}
     (
         service.spreadsheets()
         .values()
@@ -327,13 +407,15 @@ def append_rows(service: Any, spreadsheet_id: str, sheet_name: str, rows: Sequen
     if not rows:
         return 0
 
+    column_count = max((len(row) for row in rows), default=1)
+    last_col = _column_letter(column_count)
     body = {"values": rows}
     (
         service.spreadsheets()
         .values()
         .append(
             spreadsheetId=spreadsheet_id,
-            range=f"{sheet_name}!A:W",
+            range=f"{sheet_name}!A:{last_col}",
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body=body,
@@ -441,6 +523,9 @@ def main() -> int:
 
     spreadsheet_id = _optional_env("GOOGLE_SHEET_ID")
     sheet_name = _optional_env("SHEET_NAME")
+    run_log_sheet_name = _optional_env("RUN_LOG_SHEET_NAME", "Run Log")
+    auto_create_tabs = _optional_bool_env("AUTO_CREATE_TABS", True)
+    write_run_log = _optional_bool_env("WRITE_RUN_LOG", True)
     logged_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
     if args.input_jsonl:
@@ -459,7 +544,13 @@ def main() -> int:
     can_read_sheet = bool(spreadsheet_id and sheet_name)
     if can_read_sheet:
         service = _sheet_service()
-        ensure_sheet_header(service, spreadsheet_id=spreadsheet_id, sheet_name=sheet_name)
+        ensure_sheet_header(
+            service,
+            spreadsheet_id=spreadsheet_id,
+            sheet_name=sheet_name,
+            columns=SHEET_COLUMNS,
+            auto_create_tabs=auto_create_tabs,
+        )
         existing_keys = read_existing_keys(service, spreadsheet_id=spreadsheet_id, sheet_name=sheet_name)
     elif not args.dry_run:
         raise ValueError(
@@ -479,6 +570,7 @@ def main() -> int:
         "table": table_fqn,
         "fetched_rows": len(rows),
         "new_rows": len(prepared_rows),
+        "skipped_duplicates": len(rows) - len(prepared_rows),
         "dry_run": args.dry_run,
     }
     print(json.dumps(summary, indent=2, ensure_ascii=True))
@@ -505,6 +597,43 @@ def main() -> int:
         rows=prepared_rows,
     )
     print(json.dumps({"appended_rows": appended}, indent=2, ensure_ascii=True))
+
+    if write_run_log:
+        ensure_sheet_header(
+            service,
+            spreadsheet_id=spreadsheet_id,
+            sheet_name=run_log_sheet_name,
+            columns=RUN_LOG_COLUMNS,
+            auto_create_tabs=auto_create_tabs,
+        )
+        run_log_row = [
+            logged_at,
+            table_fqn,
+            str(len(rows)),
+            str(len(prepared_rows)),
+            str(len(rows) - len(prepared_rows)),
+            str(appended),
+            "TRUE" if args.dry_run else "FALSE",
+            str(args.limit),
+            "SUCCESS",
+            "",
+        ]
+        append_rows(
+            service,
+            spreadsheet_id=spreadsheet_id,
+            sheet_name=run_log_sheet_name,
+            rows=[run_log_row],
+        )
+        print(
+            json.dumps(
+                {
+                    "run_log_sheet": run_log_sheet_name,
+                    "run_log_written": True,
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
     return 0
 
 

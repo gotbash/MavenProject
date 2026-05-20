@@ -1,25 +1,37 @@
 # Temporary GM Signal Validation Log
 
-This repository now includes a lightweight exporter for writing recent signal rows
-from BigQuery into a Google Sheet for short-term validation/audit.
+This repository includes a lightweight exporter for writing recent signal rows
+from BigQuery into a Google Sheet for short-term validation and audit.
 
 ## Script
 
 - Path: `scripts/export_signals_to_google_sheet.py`
 - Purpose: fetch latest rows from `agent_outputs.signals` (or configured table),
-  apply trust/actionability rules, and append only unseen rows to a Google Sheet.
+  apply trust/actionability rules, and append only unseen rows.
 
-## Required config
+## Configuration
 
-Set these environment variables before running:
+1. Copy config template:
 
 ```bash
-export GOOGLE_SHEET_ID="your_google_sheet_id"
-export SHEET_NAME="Signal Validation Log"
-export BIGQUERY_PROJECT_ID="your_gcp_project"
-export BIGQUERY_DATASET="agent_outputs"
-export BIGQUERY_TABLE="signals"
+cp .env.example .env
 ```
+
+2. Fill required values in `.env`:
+
+- `GOOGLE_SHEET_ID`
+- `SHEET_NAME`
+- `BIGQUERY_PROJECT_ID`
+- `BIGQUERY_DATASET`
+- `BIGQUERY_TABLE`
+
+Optional values:
+
+- `AUTO_CREATE_TABS=true` (create destination tab(s) if missing)
+- `WRITE_RUN_LOG=true` (append run summary row to run log tab on live runs)
+- `RUN_LOG_SHEET_NAME=Run Log`
+- `SIGNALS_LIMIT=200`
+- `SIGNALS_PRINT_SAMPLE=5`
 
 ## Install dependencies
 
@@ -27,12 +39,38 @@ export BIGQUERY_TABLE="signals"
 python3 -m pip install -r scripts/requirements-gm-signal-export.txt
 ```
 
-## Run manually
+## Makefile commands
 
-Dry run (no writes, prints sample rows):
+- Dry run:
+
+```bash
+make signals-dry-run
+```
+
+- Live run:
+
+```bash
+make signals-live
+```
+
+Optional extra args for either command:
+
+```bash
+make signals-dry-run SIGNALS_EXTRA_ARGS="--input-jsonl scripts/sample_signals.jsonl --source-table agent_outputs.signals"
+```
+
+## Manual commands
+
+Dry run (no writes, prints sample):
 
 ```bash
 python3 scripts/export_signals_to_google_sheet.py --dry-run --limit 200 --print-sample 5
+```
+
+Live run:
+
+```bash
+python3 scripts/export_signals_to_google_sheet.py --limit 200 --print-sample 3
 ```
 
 Local sample dry run (no BigQuery/Sheets auth required):
@@ -45,57 +83,97 @@ python3 scripts/export_signals_to_google_sheet.py \
   --print-sample 5
 ```
 
-Live write:
+## Scheduling options
+
+### Server cron (hourly)
 
 ```bash
-python3 scripts/export_signals_to_google_sheet.py --limit 200 --print-sample 3
+0 * * * * cd /workspace && /usr/bin/env bash -lc 'set -a; source /workspace/.env; set +a; make signals-live'
 ```
 
-For live write, the runtime must have:
-
-- BigQuery access to `BIGQUERY_PROJECT_ID.BIGQUERY_DATASET.BIGQUERY_TABLE`
-- Sheets write access to `GOOGLE_SHEET_ID` / `SHEET_NAME`
-- Google Application Default Credentials or equivalent service account auth
-
-## Schedule daily/hourly
-
-Use cron (or any scheduler) to run repeatedly.
-
-Hourly example:
+### Server cron (daily at 06:00 UTC)
 
 ```bash
-0 * * * * cd /workspace && /usr/bin/env bash -lc 'source /path/to/env.sh && python3 scripts/export_signals_to_google_sheet.py --limit 500'
+0 6 * * * cd /workspace && /usr/bin/env bash -lc 'set -a; source /workspace/.env; set +a; make signals-live'
 ```
 
-Daily example:
+### GitHub Actions (scheduled)
 
-```bash
-0 6 * * * cd /workspace && /usr/bin/env bash -lc 'source /path/to/env.sh && python3 scripts/export_signals_to_google_sheet.py --limit 1000'
+Add a workflow at `.github/workflows/signals-export.yml` with cron, then run:
+
+```yaml
+name: Signals Export
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r scripts/requirements-gm-signal-export.txt
+      - run: make signals-live
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          SHEET_NAME: ${{ secrets.SHEET_NAME }}
+          BIGQUERY_PROJECT_ID: ${{ secrets.BIGQUERY_PROJECT_ID }}
+          BIGQUERY_DATASET: ${{ secrets.BIGQUERY_DATASET }}
+          BIGQUERY_TABLE: ${{ secrets.BIGQUERY_TABLE }}
+          AUTO_CREATE_TABS: "true"
+          WRITE_RUN_LOG: "true"
 ```
 
-If the signal pipeline has a post-run hook, invoke the script there for
-"on-pipeline-run" behavior instead of cron.
+If your signal pipeline has a post-run hook, invoking `make signals-live` there is
+preferred over cron.
+
+## Service-account permission checklist
+
+Use a service account (or ADC principal) with:
+
+1. **BigQuery API enabled** on the GCP project.
+2. **Google Sheets API enabled** on the GCP project.
+3. BigQuery permissions:
+   - `roles/bigquery.jobUser` on project (to run query jobs)
+   - `roles/bigquery.dataViewer` on dataset/table
+4. Google Sheet access:
+   - Share the target spreadsheet with the service account email as **Editor**.
+5. Credentials available at runtime:
+   - `GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json`
+   - or workload identity / ADC configured for the runtime.
 
 ## Duplicate prevention
 
-- The script reads existing `source_row_id` values from sheet column **P**.
+- Reads existing `source_row_id` values from sheet column **P**.
 - Unique key strategy:
   - Uses source `source_row_id`/`signal_id` when present.
   - Falls back to deterministic hash of stable signal fields.
-- Rows with existing keys are skipped, so reruns do not append duplicates.
+- Existing keys are skipped on reruns.
 
 ## Trusted vs untrusted logic
 
 - **REVENUE_DROP**
-  - Trusted by default (`trusted_flag=TRUE`) if source metrics are present.
-  - Marked untrusted when source metric fields are missing.
+  - Trusted (`trusted_flag=TRUE`) when source metrics are present.
+  - Untrusted when source metric fields are missing.
 - **SALES_CRASH chat label + canonical REVENUE_DROP**
   - Adds note: `Valid signal; mislabeled by chat/router taxonomy`.
 - **Profit Control / Negative Margin**
-  - If ASIN-level fee allocation is missing/not ready, marks:
+  - If ASIN-level fee allocation is missing/not ready:
     - `trusted_flag=FALSE`
     - `trust_reason=UNTRUSTED: Profit Control/Negative Margin without ASIN-level fee allocation`
     - `actionability=Backlog / validate before action`
+
+## Optional tab automation
+
+- `AUTO_CREATE_TABS=true`: creates `SHEET_NAME` tab if missing.
+- `WRITE_RUN_LOG=true`: appends summary rows to `RUN_LOG_SHEET_NAME` tab.
+- Run log row fields:
+  - `run_at`, `source_table`, `fetched_rows`, `new_rows`, `skipped_duplicates`,
+    `appended_rows`, `dry_run`, `limit`, `status`, `notes`.
 
 ## Output columns written to Google Sheet
 
