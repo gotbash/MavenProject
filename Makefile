@@ -2,11 +2,13 @@ SHELL := /usr/bin/env bash
 
 ENV_FILE ?= .env
 SIGNALS_SCRIPT := scripts/export_signals_to_google_sheet.py
-SIGNALS_LIMIT ?= 200
-SIGNALS_PRINT_SAMPLE ?= 5
-SIGNALS_EXTRA_ARGS ?=
+DEFAULT_LIMIT ?= 200
+SOURCE_TABLE ?= agent_outputs.signals
 
-.PHONY: signals-dry-run signals-live
+.PHONY: signals-install signals-dry-run signals-live
+
+signals-install:
+	python3 -m pip install -r scripts/requirements-gm-signal-export.txt
 
 signals-dry-run:
 	@set -a; \
@@ -14,15 +16,16 @@ signals-dry-run:
 	set +a; \
 	python3 "$(SIGNALS_SCRIPT)" \
 	  --dry-run \
-	  --limit "$(SIGNALS_LIMIT)" \
-	  --print-sample "$(SIGNALS_PRINT_SAMPLE)" \
-	  $(SIGNALS_EXTRA_ARGS)
+	  --limit "$${DEFAULT_LIMIT:-$(DEFAULT_LIMIT)}" \
+	  --input-jsonl scripts/sample_signals.jsonl \
+	  --source-table "$${SOURCE_TABLE:-$(SOURCE_TABLE)}" \
+	  --print-sample 5
 
 signals-live:
 	@set -a; \
 	[[ -f "$(ENV_FILE)" ]] && source "$(ENV_FILE)"; \
 	set +a; \
 	python3 "$(SIGNALS_SCRIPT)" \
-	  --limit "$(SIGNALS_LIMIT)" \
-	  --print-sample "$(SIGNALS_PRINT_SAMPLE)" \
-	  $(SIGNALS_EXTRA_ARGS)
+	  --limit "$${DEFAULT_LIMIT:-$(DEFAULT_LIMIT)}" \
+	  --source-table "$${SOURCE_TABLE:-$(SOURCE_TABLE)}" \
+	  --print-sample 5

@@ -14,6 +14,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import time
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -52,15 +53,16 @@ SHEET_COLUMNS: List[str] = [
 
 RUN_LOG_COLUMNS: List[str] = [
     "run_at",
+    "mode",
     "source_table",
     "fetched_rows",
     "new_rows",
-    "skipped_duplicates",
-    "appended_rows",
-    "dry_run",
-    "limit",
+    "duplicate_rows",
+    "trusted_rows",
+    "untrusted_rows",
     "status",
-    "notes",
+    "error_message",
+    "duration_seconds",
 ]
 
 ORDER_COLUMN_CANDIDATES: Sequence[str] = (
@@ -142,16 +144,6 @@ def _to_bool(value: Any) -> Optional[bool]:
         if normalized in {"false", "f", "0", "no", "n"}:
             return False
     return None
-
-
-def _optional_bool_env(name: str, default: bool) -> bool:
-    raw_value = os.getenv(name)
-    if raw_value is None or not raw_value.strip():
-        return default
-    parsed = _to_bool(raw_value)
-    if parsed is None:
-        raise ValueError(f"Invalid boolean value for {name}: {raw_value}")
-    return parsed
 
 
 def _column_letter(index_1_based: int) -> str:
@@ -332,15 +324,10 @@ def ensure_sheet_tab(
     service: Any,
     spreadsheet_id: str,
     sheet_name: str,
-    auto_create_tabs: bool,
 ) -> None:
     titles = get_sheet_titles(service, spreadsheet_id=spreadsheet_id)
     if sheet_name in titles:
         return
-    if not auto_create_tabs:
-        raise ValueError(
-            f"Sheet tab '{sheet_name}' does not exist and AUTO_CREATE_TABS is disabled."
-        )
     (
         service.spreadsheets()
         .batchUpdate(
@@ -351,18 +338,54 @@ def ensure_sheet_tab(
     )
 
 
+def get_sheet_id(service: Any, spreadsheet_id: str, sheet_name: str) -> int:
+    response = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title))")
+        .execute()
+    )
+    sheets = response.get("sheets", [])
+    for sheet in sheets:
+        properties = sheet.get("properties", {})
+        if properties.get("title") == sheet_name:
+            return int(properties["sheetId"])
+    raise ValueError(f"Unable to locate sheet id for tab '{sheet_name}'")
+
+
+def freeze_header_row(service: Any, spreadsheet_id: str, sheet_name: str) -> None:
+    sheet_id = get_sheet_id(service=service, spreadsheet_id=spreadsheet_id, sheet_name=sheet_name)
+    (
+        service.spreadsheets()
+        .batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "requests": [
+                    {
+                        "updateSheetProperties": {
+                            "properties": {
+                                "sheetId": sheet_id,
+                                "gridProperties": {"frozenRowCount": 1},
+                            },
+                            "fields": "gridProperties.frozenRowCount",
+                        }
+                    }
+                ]
+            },
+        )
+        .execute()
+    )
+
+
 def ensure_sheet_header(
     service: Any,
     spreadsheet_id: str,
     sheet_name: str,
     columns: Sequence[str],
-    auto_create_tabs: bool,
 ) -> None:
     ensure_sheet_tab(
         service=service,
         spreadsheet_id=spreadsheet_id,
         sheet_name=sheet_name,
-        auto_create_tabs=auto_create_tabs,
     )
     last_col = _column_letter(len(columns))
     header_range = f"{sheet_name}!A1:{last_col}1"
@@ -373,7 +396,8 @@ def ensure_sheet_header(
         .execute()
     )
     values = response.get("values", [])
-    if values and values[0]:
+    if values and values[0] == list(columns):
+        freeze_header_row(service, spreadsheet_id=spreadsheet_id, sheet_name=sheet_name)
         return
 
     body = {"values": [list(columns)]}
@@ -388,6 +412,7 @@ def ensure_sheet_header(
         )
         .execute()
     )
+    freeze_header_row(service, spreadsheet_id=spreadsheet_id, sheet_name=sheet_name)
 
 
 def read_existing_keys(service: Any, spreadsheet_id: str, sheet_name: str) -> set:
@@ -472,11 +497,17 @@ def build_sheet_row(row: Dict[str, Any], source_table: str, logged_at: str) -> L
 
 
 def parse_args() -> argparse.Namespace:
+    default_limit_raw = _optional_env("DEFAULT_LIMIT", "200")
+    try:
+        default_limit = int(default_limit_raw)
+    except ValueError as exc:
+        raise ValueError(f"DEFAULT_LIMIT must be an integer, got: {default_limit_raw}") from exc
+
     parser = argparse.ArgumentParser(description="Export latest signals from BigQuery to Google Sheets.")
     parser.add_argument(
         "--limit",
         type=int,
-        default=200,
+        default=default_limit,
         help="Maximum number of latest BigQuery rows to inspect.",
     )
     parser.add_argument(
@@ -518,132 +549,198 @@ def load_rows_from_jsonl(path: str, limit: int) -> List[Dict[str, Any]]:
     return output
 
 
+def count_trust(prepared_rows: Sequence[Sequence[str]]) -> Tuple[int, int]:
+    trusted_rows = 0
+    untrusted_rows = 0
+    for row in prepared_rows:
+        trusted_flag = row[7] if len(row) > 7 else ""
+        if trusted_flag == "TRUE":
+            trusted_rows += 1
+        elif trusted_flag == "FALSE":
+            untrusted_rows += 1
+    return trusted_rows, untrusted_rows
+
+
+def append_run_log_row(
+    service: Any,
+    spreadsheet_id: str,
+    run_log_sheet_name: str,
+    run_log_row: Sequence[str],
+) -> None:
+    ensure_sheet_header(
+        service=service,
+        spreadsheet_id=spreadsheet_id,
+        sheet_name=run_log_sheet_name,
+        columns=RUN_LOG_COLUMNS,
+    )
+    append_rows(
+        service=service,
+        spreadsheet_id=spreadsheet_id,
+        sheet_name=run_log_sheet_name,
+        rows=[list(run_log_row)],
+    )
+
+
 def main() -> int:
+    start_time = time.monotonic()
     args = parse_args()
+    mode = "dry_run" if args.dry_run else "live"
 
     spreadsheet_id = _optional_env("GOOGLE_SHEET_ID")
     sheet_name = _optional_env("SHEET_NAME")
     run_log_sheet_name = _optional_env("RUN_LOG_SHEET_NAME", "Run Log")
-    auto_create_tabs = _optional_bool_env("AUTO_CREATE_TABS", True)
-    write_run_log = _optional_bool_env("WRITE_RUN_LOG", True)
+    source_table_override = args.source_table or _optional_env("SOURCE_TABLE")
     logged_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    can_write_sheet = bool(spreadsheet_id and sheet_name)
+    service: Optional[Any] = None
 
-    if args.input_jsonl:
-        table_fqn = args.source_table or "local.sample_signals"
-        rows = load_rows_from_jsonl(path=args.input_jsonl, limit=args.limit)
-    else:
-        bq_project = _require_env("BIGQUERY_PROJECT_ID")
-        bq_dataset = _require_env("BIGQUERY_DATASET")
-        bq_table = _require_env("BIGQUERY_TABLE")
-        table_fqn = f"{bq_project}.{bq_dataset}.{bq_table}"
-        bq_client = bigquery.Client(project=bq_project)
-        rows = fetch_latest_signals(client=bq_client, table_fqn=table_fqn, limit=args.limit)
+    fetched_rows = 0
+    new_rows = 0
+    duplicate_rows = 0
+    trusted_rows = 0
+    untrusted_rows = 0
+    status = "success"
+    error_message = ""
+    source_table_label = source_table_override or "unknown"
 
-    service = None
-    existing_keys: set = set()
-    can_read_sheet = bool(spreadsheet_id and sheet_name)
-    if can_read_sheet:
-        service = _sheet_service()
-        ensure_sheet_header(
-            service,
-            spreadsheet_id=spreadsheet_id,
-            sheet_name=sheet_name,
-            columns=SHEET_COLUMNS,
-            auto_create_tabs=auto_create_tabs,
-        )
-        existing_keys = read_existing_keys(service, spreadsheet_id=spreadsheet_id, sheet_name=sheet_name)
-    elif not args.dry_run:
-        raise ValueError(
-            "GOOGLE_SHEET_ID and SHEET_NAME are required for live writes."
-        )
-
-    prepared_rows: List[List[str]] = []
-    for row in rows:
-        prepared = build_sheet_row(row=row, source_table=table_fqn, logged_at=logged_at)
-        unique_key = prepared[15]
-        if unique_key in existing_keys:
-            continue
-        prepared_rows.append(prepared)
-        existing_keys.add(unique_key)
-
-    summary = {
-        "table": table_fqn,
-        "fetched_rows": len(rows),
-        "new_rows": len(prepared_rows),
-        "skipped_duplicates": len(rows) - len(prepared_rows),
-        "dry_run": args.dry_run,
-    }
-    print(json.dumps(summary, indent=2, ensure_ascii=True))
-
-    sample_count = min(args.print_sample, len(prepared_rows))
-    if sample_count > 0:
-        print("Sample rows to append:")
-        for sample_row in prepared_rows[:sample_count]:
-            sample_payload = dict(zip(SHEET_COLUMNS, sample_row))
-            print(json.dumps(sample_payload, indent=2, ensure_ascii=True))
-    else:
-        print("No new rows to append.")
-
-    if args.dry_run:
-        print("Dry run complete: no writes performed.")
-        if not can_read_sheet:
-            print("NOTE: Sheet configuration missing; duplicate check used only in-memory keys for this run.")
-        return 0
-
-    appended = append_rows(
-        service,
-        spreadsheet_id=spreadsheet_id,
-        sheet_name=sheet_name,
-        rows=prepared_rows,
-    )
-    print(json.dumps({"appended_rows": appended}, indent=2, ensure_ascii=True))
-
-    if write_run_log:
-        ensure_sheet_header(
-            service,
-            spreadsheet_id=spreadsheet_id,
-            sheet_name=run_log_sheet_name,
-            columns=RUN_LOG_COLUMNS,
-            auto_create_tabs=auto_create_tabs,
-        )
-        run_log_row = [
-            logged_at,
-            table_fqn,
-            str(len(rows)),
-            str(len(prepared_rows)),
-            str(len(rows) - len(prepared_rows)),
-            str(appended),
-            "TRUE" if args.dry_run else "FALSE",
-            str(args.limit),
-            "SUCCESS",
-            "",
-        ]
-        append_rows(
-            service,
-            spreadsheet_id=spreadsheet_id,
-            sheet_name=run_log_sheet_name,
-            rows=[run_log_row],
-        )
-        print(
-            json.dumps(
-                {
-                    "run_log_sheet": run_log_sheet_name,
-                    "run_log_written": True,
-                },
-                indent=2,
-                ensure_ascii=True,
-            )
-        )
-    return 0
-
-
-if __name__ == "__main__":
     try:
-        raise SystemExit(main())
+        if args.input_jsonl:
+            rows = load_rows_from_jsonl(path=args.input_jsonl, limit=args.limit)
+            source_table_label = source_table_override or "local.sample_signals"
+        else:
+            bq_project = _require_env("BIGQUERY_PROJECT_ID")
+            bq_dataset = _require_env("BIGQUERY_DATASET")
+            bq_table = _require_env("BIGQUERY_TABLE")
+            bq_table_fqn = f"{bq_project}.{bq_dataset}.{bq_table}"
+            source_table_label = source_table_override or bq_table_fqn
+            bq_client = bigquery.Client(project=bq_project)
+            rows = fetch_latest_signals(client=bq_client, table_fqn=bq_table_fqn, limit=args.limit)
+
+        fetched_rows = len(rows)
+
+        existing_keys: set = set()
+        if can_write_sheet:
+            service = _sheet_service()
+            ensure_sheet_header(
+                service=service,
+                spreadsheet_id=spreadsheet_id,
+                sheet_name=sheet_name,
+                columns=SHEET_COLUMNS,
+            )
+            existing_keys = read_existing_keys(service, spreadsheet_id=spreadsheet_id, sheet_name=sheet_name)
+        elif not args.dry_run:
+            raise ValueError("GOOGLE_SHEET_ID and SHEET_NAME are required for live writes.")
+
+        prepared_rows: List[List[str]] = []
+        for row in rows:
+            prepared = build_sheet_row(row=row, source_table=source_table_label, logged_at=logged_at)
+            unique_key = prepared[15]
+            if unique_key in existing_keys:
+                continue
+            prepared_rows.append(prepared)
+            existing_keys.add(unique_key)
+
+        new_rows = len(prepared_rows)
+        duplicate_rows = fetched_rows - new_rows
+        trusted_rows, untrusted_rows = count_trust(prepared_rows)
+
+        summary = {
+            "table": source_table_label,
+            "fetched_rows": fetched_rows,
+            "new_rows": new_rows,
+            "duplicate_rows": duplicate_rows,
+            "trusted_rows": trusted_rows,
+            "untrusted_rows": untrusted_rows,
+            "mode": mode,
+        }
+        print(json.dumps(summary, indent=2, ensure_ascii=True))
+
+        sample_count = min(args.print_sample, new_rows)
+        if sample_count > 0:
+            print("Sample rows to append:")
+            for sample_row in prepared_rows[:sample_count]:
+                sample_payload = dict(zip(SHEET_COLUMNS, sample_row))
+                print(json.dumps(sample_payload, indent=2, ensure_ascii=True))
+        else:
+            print("No new rows to append.")
+
+        if args.dry_run:
+            print("Dry run complete: no writes performed.")
+            if not can_write_sheet:
+                print("NOTE: Sheet configuration missing; duplicate check used only in-memory keys for this run.")
+        else:
+            appended = append_rows(
+                service=service,
+                spreadsheet_id=spreadsheet_id,
+                sheet_name=sheet_name,
+                rows=prepared_rows,
+            )
+            print(json.dumps({"appended_rows": appended}, indent=2, ensure_ascii=True))
     except (
         ValueError,
         gcp_exceptions.GoogleAPICallError,
         auth_exceptions.DefaultCredentialsError,
     ) as exc:
+        status = "failed"
+        error_message = str(exc)
+        print(f"ERROR: {exc}")
+    finally:
+        duration_seconds = round(time.monotonic() - start_time, 3)
+        if spreadsheet_id and run_log_sheet_name:
+            if service is None:
+                try:
+                    service = _sheet_service()
+                except (
+                    gcp_exceptions.GoogleAPICallError,
+                    auth_exceptions.DefaultCredentialsError,
+                    ValueError,
+                ) as log_service_exc:
+                    print(f"WARNING: Could not initialize Sheets service for run log: {log_service_exc}")
+            if service is not None:
+                run_log_row = [
+                    logged_at,
+                    mode,
+                    source_table_label,
+                    str(fetched_rows),
+                    str(new_rows),
+                    str(duplicate_rows),
+                    str(trusted_rows),
+                    str(untrusted_rows),
+                    status,
+                    error_message,
+                    str(duration_seconds),
+                ]
+                try:
+                    append_run_log_row(
+                        service=service,
+                        spreadsheet_id=spreadsheet_id,
+                        run_log_sheet_name=run_log_sheet_name,
+                        run_log_row=run_log_row,
+                    )
+                    print(
+                        json.dumps(
+                            {
+                                "run_log_sheet": run_log_sheet_name,
+                                "run_log_written": True,
+                                "run_status": status,
+                            },
+                            indent=2,
+                            ensure_ascii=True,
+                        )
+                    )
+                except (
+                    ValueError,
+                    gcp_exceptions.GoogleAPICallError,
+                    auth_exceptions.DefaultCredentialsError,
+                ) as log_exc:
+                    print(f"WARNING: Could not append run log row: {log_exc}")
+
+    return 0 if status == "success" else 1
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (ValueError, gcp_exceptions.GoogleAPICallError, auth_exceptions.DefaultCredentialsError) as exc:
         print(f"ERROR: {exc}")
         raise SystemExit(1) from exc
